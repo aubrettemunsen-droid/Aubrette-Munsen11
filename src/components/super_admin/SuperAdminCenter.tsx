@@ -32,7 +32,7 @@ import PlatformKnowledgeCenter from './ai-brain-center/PlatformKnowledgeCenter';
 import PlatformWorkflowCenter from './ai-brain-center/PlatformWorkflowCenter';
 import P1IntelligenceControlCenter from './ai-brain-center/P1IntelligenceControlCenter';
 import PlatformTuningConsole from './ai-brain-center/PlatformTuningConsole';
-import EcosBrainRfcValidation from './ai-brain-center/EcosBrainRfcValidation';
+import CentralAIOperatorTerminal from './ai-brain-center/CentralAIOperatorTerminal';
 
 interface SuperAdminCenterProps {
   activeSubTab?: 'stats' | 'tenants' | 'packages' | 'finance' | 'gateways' | 'communications' | 'ai-ops' | 'marketplace' | 'developer' | 'roles' | 'logs' | 'settings' | 'query' | 'diagnostics' | 'sectors';
@@ -237,7 +237,7 @@ export default function SuperAdminCenter({
   const [isSyncingGateway, setIsSyncingGateway] = useState<string | null>(null);
 
   // ==================== 5. AI 大脑中心 States ====================
-  const [aiCentralTab, setAiCentralTab] = useState<'agents' | 'workflow' | 'automation' | 'knowledge' | 'rules' | 'events' | 'tasks' | 'monitor' | 'dashboard' | 'execution_center' | 'discovery' | 'monitoring' | 'optimizer' | 'strategic' | 'cognitive' | 'nervous' | 'memory' | 'boardroom' | 'system_map' | 'system_registry' | 'ai_navigator' | 'visual_workflow' | 'p1_intelligence' | 'tuning' | 'brain_rfc_validation'>('brain_rfc_validation');
+  const [aiCentralTab, setAiCentralTab] = useState<'agents' | 'workflow' | 'automation' | 'knowledge' | 'rules' | 'events' | 'tasks' | 'monitor' | 'dashboard' | 'execution_center' | 'discovery' | 'monitoring' | 'optimizer' | 'strategic' | 'cognitive' | 'nervous' | 'memory' | 'boardroom' | 'system_map' | 'system_registry' | 'ai_navigator' | 'visual_workflow' | 'p1_intelligence' | 'tuning'>('agents');
 
   useEffect(() => {
     const handleSetCentralTab = (e: Event) => {
@@ -2673,19 +2673,21 @@ export default function SuperAdminCenter({
       {activeSubTab === 'ai-ops' && (
         <div className="space-y-6 text-left">
           
+          {/* Central AI Operator Terminal */}
+          <CentralAIOperatorTerminal 
+            tenantDB={tenantDB}
+            setTenantDB={setTenantDB}
+            onAddSystemLog={onAddSystemLog}
+          />
+          
           {/* AI Central Inner Tabs Selector */}
           <div className="flex flex-wrap gap-2 border-b border-slate-200 pb-3 mb-4">
             {[
               { id: 'dashboard', name: '智脑大盘', icon: LayoutDashboard },
-              { id: 'brain_rfc_validation', name: 'Brain v1.0.0 RFC & 压力验证', icon: Award },
               { id: 'p1_intelligence', name: '决策治理', icon: Sparkles },
               { id: 'knowledge', name: '知识向量', icon: BookOpen },
               { id: 'nervous', name: '突触网络', icon: Network },
-              { id: 'tuning', name: 'ModaGPT认知环/微调', icon: Sliders },
-              { id: 'memory', name: '长期记忆 DNA', icon: Shield },
-              { id: 'boardroom', name: '智能联席会议', icon: Bot },
-              { id: 'cognitive', name: '认知治理', icon: Eye },
-              { id: 'strategic', name: '战略大脑', icon: Compass }
+              { id: 'tuning', name: '智脑微调(LoRA)', icon: Sliders }
             ].map(sub => {
               const SubIcon = sub.icon;
               const isSubActive = aiCentralTab === sub.id;
@@ -2709,12 +2711,6 @@ export default function SuperAdminCenter({
           {aiCentralTab === 'dashboard' && (
             <div className="bg-white border border-slate-200 p-5 rounded-xl space-y-4 animate-fadeIn text-left text-slate-900 shadow-sm">
               <EcosCEODashboard setAiCentralTab={setAiCentralTab} onAddSystemLog={onAddSystemLog} />
-            </div>
-          )}
-
-          {aiCentralTab === 'brain_rfc_validation' && (
-            <div className="animate-fadeIn">
-              <EcosBrainRfcValidation />
             </div>
           )}
 

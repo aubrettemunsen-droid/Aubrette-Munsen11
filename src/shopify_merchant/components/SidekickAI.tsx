@@ -26,7 +26,7 @@ interface SidekickAIProps {
   setIsMaximized?: (val: boolean) => void;
 }
 
-function ThinkingAccordion({ thinking }: { thinking: { intent: string; confidence: number; reasoning: string } }) {
+function ThinkingAccordion({ thinking }: { thinking: { intent: string; confidence: number; reasoning: string; planning?: string; permission?: string; validator?: string } }) {
   const [isOpen, setIsOpen] = useState(false);
   return (
     <div className="mb-2 bg-neutral-50 border border-neutral-150 rounded p-2 select-none">
@@ -43,7 +43,7 @@ function ThinkingAccordion({ thinking }: { thinking: { intent: string; confidenc
       </button>
       
       {isOpen && (
-        <div className="mt-2 text-[10px] text-neutral-600 space-y-1.5 border-t border-neutral-100 pt-2 animate-fadeIn leading-relaxed">
+        <div className="mt-2 text-[10px] text-neutral-600 space-y-2 border-t border-neutral-100 pt-2 animate-fadeIn leading-relaxed font-sans">
           <div>
             <span className="font-semibold text-neutral-700">📌 业务诉求: </span>
             <span>{thinking.intent}</span>
@@ -52,6 +52,24 @@ function ThinkingAccordion({ thinking }: { thinking: { intent: string; confidenc
             <span className="font-semibold text-neutral-700">🧠 洞察推理: </span>
             <span>{thinking.reasoning}</span>
           </div>
+          {thinking.planning && (
+            <div>
+              <span className="font-semibold text-neutral-700">📋 执行规画: </span>
+              <span className="text-neutral-500 font-mono text-[9px]">{thinking.planning}</span>
+            </div>
+          )}
+          {thinking.permission && (
+            <div>
+              <span className="font-semibold text-neutral-700">🔒 安全凭证: </span>
+              <span className="text-cyan-600 bg-cyan-50 border border-cyan-100 px-1 rounded text-[9px] font-mono">{thinking.permission}</span>
+            </div>
+          )}
+          {thinking.validator && (
+            <div>
+              <span className="font-semibold text-neutral-700">✔️ 数据校验: </span>
+              <span className="text-emerald-600 bg-emerald-50 border border-emerald-100 px-1 rounded text-[9px] font-mono">{thinking.validator}</span>
+            </div>
+          )}
         </div>
       )}
     </div>

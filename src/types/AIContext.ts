@@ -131,6 +131,18 @@
    * AI 完整上下文对象 
    * —— 所有 AI 请求在进 LLM 前都必须构造这个对象 
    */ 
+  export interface Historical7DaySummary {
+    totalGMV: number;
+    totalOrders: number;
+    avgConversionRate: number;
+    dailyTrend: {
+      date: string;
+      gmv: number;
+      orders: number;
+      conversionRate: number;
+    }[];
+  }
+
   export interface AIContext { 
     shop: ShopContext; 
     user: UserContext; 
@@ -139,6 +151,7 @@
     metrics?: MetricsContext; 
     currentProduct?: ProductContext; 
     flags?: FeatureFlags; 
+    historical7DaySummary?: Historical7DaySummary;
   } 
   
   /** 

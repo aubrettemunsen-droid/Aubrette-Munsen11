@@ -81,17 +81,44 @@ class CommerceAPIClient {
   /**
    * Create a product
    */
-  async createProduct(product: {
-    sku: string;
-    name: string;
-    price: number;
-    costPrice?: number;
-    stock?: number;
-    category?: string;
-    description?: string;
-    tags?: string[];
-  }): Promise<ApiResponse<any>> {
-    return this.request('/products', 'POST', product);
+  async createProduct(product: any): Promise<ApiResponse<any>> {
+    // Map frontend fields dynamically to match backend expectations
+    const mapped = {
+      id: product.id,
+      sku: product.sku || `SKU-${Date.now()}`,
+      name: product.name || product.title || 'Untitled',
+      description: product.description || '',
+      price: product.price !== undefined ? Number(product.price) : 0,
+      costPrice: product.costPrice !== undefined ? Number(product.costPrice) : (product.costPerItem !== undefined ? Number(product.costPerItem) : (product.cost !== undefined ? Number(product.cost) : 0)),
+      stock: product.stock !== undefined ? Number(product.stock) : (product.inventory !== undefined ? Number(product.inventory) : 0),
+      minStock: product.minStock !== undefined ? Number(product.minStock) : 10,
+      category: product.category || product.type || 'General',
+      status: product.status || 'draft',
+      tags: product.tags || [],
+      createdAt: product.createdAt || new Date().toISOString(),
+      updatedAt: product.updatedAt || new Date().toISOString()
+    };
+    return this.request('/products', 'POST', mapped);
+  }
+
+  /**
+   * Update an existing product
+   */
+  async updateProduct(id: string, product: any): Promise<ApiResponse<any>> {
+    // Map frontend fields dynamically to match backend expectations
+    const mapped = {
+      sku: product.sku,
+      name: product.name || product.title,
+      description: product.description,
+      price: product.price !== undefined ? Number(product.price) : undefined,
+      costPrice: product.costPrice !== undefined ? Number(product.costPrice) : (product.costPerItem !== undefined ? Number(product.costPerItem) : (product.cost !== undefined ? Number(product.cost) : undefined)),
+      stock: product.stock !== undefined ? Number(product.stock) : (product.inventory !== undefined ? Number(product.inventory) : undefined),
+      minStock: product.minStock !== undefined ? Number(product.minStock) : undefined,
+      category: product.category || product.type,
+      status: product.status,
+      tags: product.tags,
+    };
+    return this.request(`/products/${id}`, 'PUT', mapped);
   }
 
   /**
@@ -106,25 +133,32 @@ class CommerceAPIClient {
   }
 
   /**
-   * Save products (batch update) - DEPRECATED
-   * Use createProduct, updateProduct individually instead
-   * Kept for backwards compatibility
+   * Save products (batch update)
+   * Kept for backwards compatibility, executes create or update dynamically
    */
   async saveProducts(products: any[]): Promise<boolean> {
     console.warn(
-      '[CommerceAPIClient] saveProducts() is deprecated. Use createProduct() or updateProduct() instead.'
+      '[CommerceAPIClient] saveProducts() syncing list to backend.'
     );
-    // Since API doesn't support batch update yet, create missing products
     const existing = await this.getProducts();
     const existingIds = new Set((existing.data || []).map((p) => p.id));
 
     for (const product of products) {
       if (!existingIds.has(product.id)) {
         await this.createProduct(product);
+      } else {
+        await this.updateProduct(product.id, product);
       }
     }
 
     return true;
+  }
+
+  /**
+   * Delete a product
+   */
+  async deleteProduct(id: string): Promise<ApiResponse<any>> {
+    return this.request(`/products/${id}`, 'DELETE');
   }
 
   // ============================================================

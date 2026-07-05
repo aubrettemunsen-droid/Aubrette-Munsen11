@@ -3,6 +3,7 @@ import { Product } from '../types';
 import { MOCK_PRODUCT_SVGS } from '../data/mockData';
 import { Edit3, Store, TrendingUp, AlertCircle } from 'lucide-react';
 import { eventBus } from '../services/eventBus';
+import { useShopStore } from '../stores/shopStore';
 
 interface ProductPanelProps {
   activeProduct: Product;
@@ -15,6 +16,9 @@ export default function ProductPanel({
   handleModifyStock,
   handlePriceChange,
 }: ProductPanelProps) {
+  const { settings } = useShopStore();
+  const currencySymbol = settings.currencySymbol || '¥';
+
   // Compute internal margins
   const cost = activeProduct.costPerItem || 0;
   const price = activeProduct.price || 0;
@@ -114,9 +118,9 @@ export default function ProductPanel({
         <h4 className="font-bold text-[10px] font-mono uppercase tracking-widest text-[#616161]">FAST PRICING EDITOR</h4>
         <div className="space-y-2">
           <div>
-            <label className="block text-[9px] font-mono text-neutral-400 mb-1 uppercase">Price (€)</label>
+            <label className="block text-[9px] font-mono text-neutral-400 mb-1 uppercase">Price ({currencySymbol})</label>
             <div className="relative">
-              <span className="absolute left-2.5 top-2 text-[#616161]">€</span>
+              <span className="absolute left-2.5 top-2 text-[#616161]">{currencySymbol}</span>
               <input
                 type="number"
                 value={activeProduct.price}
@@ -130,7 +134,7 @@ export default function ProductPanel({
           <div className="grid grid-cols-2 gap-2 bg-neutral-50 border border-neutral-200 p-2 rounded text-[10px] font-mono">
             <div>
               <span className="text-neutral-400 block text-[9px] uppercase">Cost</span>
-              <span className="font-bold text-[#111]">€{cost.toFixed(2)}</span>
+              <span className="font-bold text-[#111]">{currencySymbol}{cost.toFixed(2)}</span>
             </div>
             <div>
               <span className="text-neutral-400 block text-[9px] uppercase">Margin</span>

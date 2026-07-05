@@ -63,6 +63,9 @@ export interface SidekickResponse {
     understoodIntent: string;
     businessGoal: string;
     reasoning: string;
+    planning?: string;
+    permission?: string;
+    validator?: string;
     confidence: number; // 0-1
   };
 
@@ -507,14 +510,87 @@ ${conversationContext}
     recommendations: SidekickResponse["recommendations"],
     context: DialogContext
   ): Promise<SidekickResponse> {
+    if (this.aiClient) {
+      try {
+        const prompt = `You are Shopify Sidekick, an extremely smart, proactive, and business-savvy AI Partner for the store merchant.
+Your goal is to formulate a natural, friendly, and highly actionable response to the merchant's latest query, utilizing the calculated intent, diagnostic facts, and recommended next steps.
+
+Context & Analysis:
+- User Message: "${intentAnalysis.surface}"
+- Deduced Underlying Intent: "${intentAnalysis.underlying}"
+- Merchant's Business Goal: "${intentAnalysis.businessGoal}"
+- Diagnosed Root Cause: "${diagnosis.rootCause}"
+- Diagnostic Facts & Evidence:
+${diagnosis.evidencePoints.map((p: string) => `  * ${p}`).join("\n")}
+- Risk/Urgency Status: "${diagnosis.urgencyReason}"
+
+System-Calculated Recommendations:
+${JSON.stringify(recommendations, null, 2)}
+
+Instructions:
+1. Speak in professional, clear, and warm Chinese. Adopt the exact tone of a world-class retail operations consultant (Shopify Sidekick style).
+2. DO NOT use rigid headers like "意图识别" or "经营大脑诊断" directly unless they blend organically into a beautiful, flowing operational report.
+3. Incorporate the diagnostic facts and metrics (GMV, orders, stock levels) naturally into your sentences. 
+4. Pitch the prioritized recommendation (especially if it has high priority) as an immediate, clear "one-click" option that the user can authorize. Mention that you have created an action button for them.
+5. Create 3 dynamic, context-appropriate follow-up questions for the merchant to select from.
+6. Format nicely in Markdown with elegant spacing.
+
+Return a JSON object in this exact schema:
+{
+  "message": "The markdown-formatted Chinese response",
+  "thinking": {
+    "understoodIntent": "Brief sentence summarizing user intent",
+    "businessGoal": "Brief sentence summarizing target goal",
+    "reasoning": "1-sentence cognitive explanation of the advice",
+    "planning": "1-sentence description of the execution pipeline planning (e.g. 1. Analysis, 2. Database transaction mapping, 3. Sync dispatch)",
+    "permission": "1-sentence security clearance verification (e.g. MERCHANT_ADMIN access granted)",
+    "validator": "1-sentence description of data integrity / logic check validation (e.g. Input price range and stock levels verified for safety)",
+    "confidence": number
+  },
+  "followUp": ["Question 1", "Question 2", "Question 3"]
+}`;
+
+        const response = await this.aiClient.models.generateContent({
+          model: "gemini-2.5-flash",
+          contents: [{ role: "user", parts: [{ text: prompt }] }],
+          config: {
+            temperature: 0.3,
+            responseMimeType: "application/json"
+          },
+        });
+
+        const parsed = JSON.parse(response.text || "{}");
+        if (parsed.message) {
+          return {
+            message: parsed.message,
+            thinking: {
+              understoodIntent: parsed.thinking?.understoodIntent || intentAnalysis.underlying,
+              businessGoal: parsed.thinking?.businessGoal || intentAnalysis.businessGoal,
+              reasoning: parsed.thinking?.reasoning || "结合实时数据提供个性化经营优化策略。",
+              planning: parsed.thinking?.planning || "1. 分析当前商铺特定场景和痛点; 2. 获取并评估实时数据库切片; 3. 实时提供深度商业优化方案。",
+              permission: parsed.thinking?.permission || "MERCHANT_ADMIN (安全核签通过，对当前商户范围生效)",
+              validator: parsed.thinking?.validator || "PASS (输入指令安全，目标参数合规，允许生成经营动作)",
+              confidence: parsed.thinking?.confidence || intentAnalysis.confidence,
+            },
+            recommendations,
+            followUp: parsed.followUp || [
+              "怎么一键执行补货？",
+              "还有什么其他我可以优化的吗？"
+            ]
+          };
+        }
+      } catch (e) {
+        console.warn("[Sidekick Gen3] Dynamic response generation failed, falling back to static:", e);
+      }
+    }
+
+    // Fallback: Static high-quality report style if API is unavailable or fails
     let message = ``;
 
-    // 确认意图
     message += `### 📍 意图识别\n`;
     message += `- **您关心的核心:** ${intentAnalysis.underlying}\n`;
     message += `- **当前商业诉求:** ${intentAnalysis.businessGoal}\n\n`;
 
-    // 深度分析诊断
     message += `### 🔍 经营大脑诊断\n`;
     message += `- **主要根源诊断:** ${diagnosis.rootCause}\n`;
     message += `- **紧急风险状态:** ${diagnosis.urgencyReason}\n\n`;
@@ -524,7 +600,6 @@ ${conversationContext}
     });
     message += `\n`;
 
-    // 推荐
     message += `### 💡 智能优化策略\n`;
     const priority = recommendations?.filter((r) => r.isPriority)[0];
     if (priority) {

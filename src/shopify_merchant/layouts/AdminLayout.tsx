@@ -41,6 +41,7 @@ import { useProductStore } from '../stores/productStore';
 import { useOrderStore } from '../stores/orderStore';
 import { useCustomerStore } from '../stores/customerStore';
 import { useDiscountStore } from '../stores/discountStore';
+import { commerceAPI } from '../../services/CommerceAPIClient';
 
 export default function AdminLayout({ onToggleAdminMode }: { onToggleAdminMode?: () => void }) {
   const { currentTab, setCurrentTab } = useLayoutStore();
@@ -51,6 +52,61 @@ export default function AdminLayout({ onToggleAdminMode }: { onToggleAdminMode?:
   const { orders, setOrders } = useOrderStore();
   const { customers, setCustomers } = useCustomerStore();
   const { discounts, setDiscounts } = useDiscountStore();
+
+  // Load real data from database on mount
+  useEffect(() => {
+    const fetchDatabaseSlices = async () => {
+      try {
+        const [prodRes, orderRes, custRes] = await Promise.all([
+          commerceAPI.getProducts(),
+          commerceAPI.getOrders(),
+          commerceAPI.getCustomers()
+        ]);
+        
+        if (prodRes.success && prodRes.data) {
+          const mappedProducts = prodRes.data.map((p: any) => ({
+            id: p.id,
+            title: p.name || p.title || 'Untitled Product',
+            description: p.description || '',
+            image: p.image || '',
+            price: Number(p.price) || 0,
+            compareAtPrice: p.compareAtPrice !== undefined ? Number(p.compareAtPrice) : (p.originalPrice !== undefined ? Number(p.originalPrice) : 0),
+            inventory: p.inventory !== undefined ? Number(p.inventory) : (p.stock !== undefined ? Number(p.stock) : 0),
+            sku: p.sku || `SKU-${Math.floor(1000 + Math.random() * 9000)}`,
+            status: p.status || 'active',
+            images: p.images || ['wallet'],
+            tags: p.tags || [],
+            vendor: p.vendor || 'Default Vendor',
+            type: p.type || p.category || 'General',
+            inventoryByLocation: p.inventoryByLocation || { 'Main Warehouse': p.inventory || p.stock || 0 }
+          }));
+          setProducts(mappedProducts);
+        }
+        
+        if (orderRes.success && orderRes.data) {
+          setOrders(orderRes.data);
+        }
+        
+        if (custRes.success && custRes.data) {
+          setCustomers(custRes.data);
+        }
+      } catch (err) {
+        console.error('[AdminLayout] Failed to load database slices:', err);
+      }
+    };
+    
+    fetchDatabaseSlices();
+
+    const handleReloadSignal = () => {
+      console.log("[AdminLayout ECOS DB Reloader] Real-time database update signal received. Reloading layout slices...");
+      fetchDatabaseSlices();
+    };
+    window.addEventListener('ECOS_RELOAD_DB', handleReloadSignal);
+
+    return () => {
+      window.removeEventListener('ECOS_RELOAD_DB', handleReloadSignal);
+    };
+  }, [setProducts, setOrders, setCustomers]);
 
 
 

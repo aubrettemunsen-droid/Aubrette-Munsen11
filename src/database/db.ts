@@ -215,8 +215,118 @@ export async function insertProduct(product: any): Promise<any> {
   } else {
     const db = loadJsonDb();
     db.products.push(product);
+    
+    // Sync with old tenantDB nesting format for platform-level AI compatibility
+    if (db.tenantDB && db.tenantDB['retail']) {
+      if (!db.tenantDB['retail'].products) {
+        db.tenantDB['retail'].products = [];
+      }
+      // Ensure we don't push duplicates
+      const exists = db.tenantDB['retail'].products.some((p: any) => p.id === product.id);
+      if (!exists) {
+        db.tenantDB['retail'].products.push(product);
+      }
+    }
+    
     saveJsonDb(db);
     return product;
+  }
+}
+
+/**
+ * Update existing product in database
+ */
+export async function updateProductInDb(id: string, storeId: string, tenantId: string, product: any): Promise<any> {
+  if (dbType === 'postgres' && pool) {
+    try {
+      const result = await pool.query(
+        `UPDATE products 
+         SET sku = $1, name = $2, description = $3, price = $4, cost_price = $5, stock = $6, min_stock = $7, category = $8, status = $9, tags = $10, updated_at = $11
+         WHERE id = $12 AND store_id = $13 AND tenant_id = $14
+         RETURNING *`,
+        [
+          product.sku,
+          product.name,
+          product.description,
+          product.price,
+          product.costPrice,
+          product.stock,
+          product.minStock,
+          product.category,
+          product.status,
+          JSON.stringify(product.tags),
+          new Date(),
+          id,
+          storeId,
+          tenantId,
+        ]
+      );
+      return result.rows[0];
+    } catch (error) {
+      console.error('[Database] Error updating product:', error);
+      return null;
+    }
+  } else {
+    const db = loadJsonDb();
+    const idx = db.products.findIndex((p: any) => p.id === id);
+    if (idx !== -1) {
+      db.products[idx] = { 
+        ...db.products[idx], 
+        ...product, 
+        updatedAt: new Date().toISOString() 
+      };
+      
+      // Also update inside old tenantDB nesting format
+      if (db.tenantDB && db.tenantDB['retail'] && db.tenantDB['retail'].products) {
+        const tIdx = db.tenantDB['retail'].products.findIndex((p: any) => p.id === id);
+        if (tIdx !== -1) {
+          db.tenantDB['retail'].products[tIdx] = { 
+            ...db.tenantDB['retail'].products[tIdx], 
+            ...product 
+          };
+        }
+      }
+      
+      saveJsonDb(db);
+      return db.products[idx];
+    }
+    return null;
+  }
+}
+
+/**
+ * Delete a product from database
+ */
+export async function deleteProductInDb(id: string, storeId: string, tenantId: string): Promise<boolean> {
+  if (dbType === 'postgres' && pool) {
+    try {
+      await pool.query(
+        'DELETE FROM products WHERE id = $1 AND store_id = $2 AND tenant_id = $3',
+        [id, storeId, tenantId]
+      );
+      return true;
+    } catch (error) {
+      console.error('[Database] Error deleting product:', error);
+      return false;
+    }
+  } else {
+    const db = loadJsonDb();
+    const idx = db.products.findIndex((p: any) => p.id === id);
+    if (idx !== -1) {
+      db.products.splice(idx, 1);
+      
+      // Also update inside old tenantDB nesting format
+      if (db.tenantDB && db.tenantDB['retail'] && db.tenantDB['retail'].products) {
+        const tIdx = db.tenantDB['retail'].products.findIndex((p: any) => p.id === id);
+        if (tIdx !== -1) {
+          db.tenantDB['retail'].products.splice(tIdx, 1);
+        }
+      }
+      
+      saveJsonDb(db);
+      return true;
+    }
+    return false;
   }
 }
 
@@ -378,7 +488,7 @@ export async function insertEvent(event: any): Promise<void> {
 /**
  * JSON Database Helper Functions
  */
-function loadJsonDb(): DatabaseSchema {
+function loadJsonDb(): any {
   if (!jsonDbPath) {
     throw new Error('JSON database path not set');
   }
@@ -387,26 +497,14 @@ function loadJsonDb(): DatabaseSchema {
     const data = fs.readFileSync(jsonDbPath, 'utf-8');
     const parsed = JSON.parse(data);
     
-    // If it's the old format (has tenants, tenantDB, etc.), convert it
-    if (parsed.tenants && !parsed.products) {
-      console.log('[Database] Detected old format, migrating to new schema');
-      return {
-        products: [],
-        orders: [],
-        customers: [],
-        events: [],
-        audit_logs: [],
-      };
-    }
+    // Ensure all required fields exist without discarding other root fields
+    if (!parsed.products) parsed.products = [];
+    if (!parsed.orders) parsed.orders = [];
+    if (!parsed.customers) parsed.customers = [];
+    if (!parsed.events) parsed.events = [];
+    if (!parsed.audit_logs) parsed.audit_logs = [];
     
-    // Ensure all required fields exist
-    return {
-      products: parsed.products || [],
-      orders: parsed.orders || [],
-      customers: parsed.customers || [],
-      events: parsed.events || [],
-      audit_logs: parsed.audit_logs || [],
-    };
+    return parsed;
   } catch (error) {
     console.log('[Database] Creating fresh database schema');
     return {
@@ -419,7 +517,7 @@ function loadJsonDb(): DatabaseSchema {
   }
 }
 
-function saveJsonDb(db: DatabaseSchema): void {
+function saveJsonDb(db: any): void {
   if (!jsonDbPath) {
     throw new Error('JSON database path not set');
   }

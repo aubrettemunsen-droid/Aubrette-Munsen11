@@ -225,11 +225,11 @@ export const INITIAL_DISCOUNTS: Discount[] = [
 export const INITIAL_SETTINGS: StoreSettings = {
   shopName: 'Atelier Noir',
   shopEmail: 'hello@noiratelier.com',
-  currency: 'EUR',
-  currencySymbol: '€',
-  timezone: 'GMT+1 (Berlin)',
+  currency: 'CNY',
+  currencySymbol: '¥',
+  timezone: 'GMT+8 (Beijing)',
   shippingStandardRate: 10.00,
-  taxRate: 19.00, // 19% standard VAT
+  taxRate: 13.00, // 13% standard VAT
   plan: 'Shopify',
   language: 'zh'
 };

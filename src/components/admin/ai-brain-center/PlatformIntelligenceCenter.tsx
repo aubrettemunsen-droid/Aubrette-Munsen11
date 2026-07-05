@@ -39,6 +39,7 @@ import {
   ContextEngineV2Layer,
   BrainFinalizationLayer
 } from './EcosAdvancedLayers';
+import EcosBusinessGraphLayer from './EcosBusinessGraphLayer';
 import { BusinessContextEngine } from '../../../services/brain/BusinessContextEngine';
 import { 
   FashionEntity, 
@@ -98,6 +99,7 @@ export default function PlatformIntelligenceCenter() {
     | 'l36_execution_governance'
     | 'l37_context_engine_v2'
     | 'l38_brain_finalization'
+    | 'l39_business_graph'
   >('l10_ontology');
 
   // Success Feedbacks state
@@ -1085,7 +1087,8 @@ export default function PlatformIntelligenceCenter() {
             { id: 'l35_agent_coordination', label: 'Layer 481-490: Agent 协同争议仲裁脑', status: 'DEBATES', emoji: '⚖️' },
             { id: 'l36_execution_governance', label: 'Layer 491-500: 自治执行安全治理层', status: 'GOVERNANCE', emoji: '🛡️' },
             { id: 'l37_context_engine_v2', label: 'Layer 501-520: 商业上下文 2.0 自动诊断', status: 'GATEWAY', emoji: '🔌' },
-            { id: 'l38_brain_finalization', label: 'Layer 521-540: 企业大脑最终自治闭环', status: 'MUTUAL_OS', emoji: '🌌' }
+            { id: 'l38_brain_finalization', label: 'Layer 521-540: 企业大脑最终自治闭环', status: 'MUTUAL_OS', emoji: '🌌' },
+            { id: 'l39_business_graph', label: 'Layer 541-600: 商业图谱关联推理系统', status: 'GRAPH_REASON', emoji: '🕸️' }
           ].map((layer) => (
             <button
               key={layer.id}
@@ -4984,6 +4987,10 @@ export default function PlatformIntelligenceCenter() {
 
           {intelLayer === 'l38_brain_finalization' && (
             <BrainFinalizationLayer triggerSuccess={triggerSuccess} />
+          )}
+
+          {intelLayer === 'l39_business_graph' && (
+            <EcosBusinessGraphLayer triggerSuccess={triggerSuccess} />
           )}
 
         </div>

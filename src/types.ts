@@ -3818,5 +3818,38 @@ export interface HealingAuditLogItem {
   created_at: string;
 }
 
+// Graph-based business entity relationship model types
+export interface BusinessGraphNode {
+  id: string; // unique node id e.g. "g_sup_01", "g_prod_101", "g_cust_lux", "g_camp_winter"
+  type: 'Supplier' | 'Product' | 'CustomerSegment' | 'Campaign';
+  entityId: string; // ID of the referenced entity in suppliers, products, etc.
+  label: string; // Display label
+  metrics: {
+    performance_score?: number; // Supplier reliability or Product quality score (0-100)
+    satisfaction_rate?: number; // Customer satisfaction index (0-100)
+    roi?: number; // Campaign ROI ratio (e.g., 2.4)
+    revenue_eur?: number; // Revenue generated or tied (in EUR)
+    return_rate_pct?: number; // Product return rate
+    defect_rate_pct?: number; // Quality / defect rate of materials
+  };
+  metadata?: Record<string, any>;
+}
+
+export interface BusinessGraphEdge {
+  id: string; // unique edge id e.g. "edge_01"
+  source: string; // source node id
+  target: string; // target node id
+  relationType: 'SUPPLIES_FOR' | 'PURCHASED_BY' | 'PROMOTED_IN' | 'INFLUENCED_BY' | 'DRIVES_ROI' | 'CORRELATES_WITH';
+  weight: number; // 0 to 1 representing relationship impact or strength
+  direction: 'positive' | 'negative' | 'neutral'; // direction of correlation / impact
+  explanation: string; // Cognitive explanation of the connection (e.g., "Marseille Port delays of Wool Supplier directly increased Cashmere Coat's refund rate by 14% and lowered Black Friday Campaign ROI")
+}
+
+export interface BusinessGraphContext {
+  nodes: BusinessGraphNode[];
+  edges: BusinessGraphEdge[];
+}
+
+
 
 

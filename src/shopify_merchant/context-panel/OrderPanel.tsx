@@ -2,6 +2,7 @@ import React from 'react';
 import { ShoppingBag, CheckCircle2 } from 'lucide-react';
 import { Order } from '../types';
 import { MOCK_PRODUCT_SVGS } from '../data/mockData';
+import { useShopStore } from '../stores/shopStore';
 
 interface OrderPanelProps {
   activeOrder: Order;
@@ -14,6 +15,9 @@ export default function OrderPanel({
   handleFulfillOrder,
   handleRefundOrder,
 }: OrderPanelProps) {
+  const { settings } = useShopStore();
+  const currencySymbol = settings.currencySymbol || '¥';
+
   return (
     <div className="space-y-4">
       <div className="bg-white border border-[#e3e3e3] p-4.5 rounded-lg space-y-3 shadow-xs">
@@ -67,10 +71,10 @@ export default function OrderPanel({
                 </div>
                 <div>
                   <p className="font-medium text-black truncate max-w-[170px]">{it.title}</p>
-                  <span className="text-[10px] text-neutral-400 font-mono">Qty: {it.quantity} × €{it.price.toFixed(2)}</span>
+                  <span className="text-[10px] text-neutral-400 font-mono">Qty: {it.quantity} × {currencySymbol}{it.price.toFixed(2)}</span>
                 </div>
               </div>
-              <span className="font-semibold font-mono">€{(it.quantity * it.price).toFixed(2)}</span>
+              <span className="font-semibold font-mono">{currencySymbol}{(it.quantity * it.price).toFixed(2)}</span>
             </div>
           ))}
         </div>
@@ -78,25 +82,25 @@ export default function OrderPanel({
         <div className="border-t border-[#f1f1f1] pt-2 space-y-1.5 text-[11px]">
           <div className="flex justify-between text-neutral-500">
             <span>Subtotal</span>
-            <span className="font-mono">€{activeOrder.subtotal.toFixed(2)}</span>
+            <span className="font-mono">{currencySymbol}{activeOrder.subtotal.toFixed(2)}</span>
           </div>
           {activeOrder.discountAmount && (
             <div className="flex justify-between text-[#125828] font-medium">
               <span>Discount ({activeOrder.discountCode})</span>
-              <span className="font-mono">-€{activeOrder.discountAmount.toFixed(2)}</span>
+              <span className="font-mono">-{currencySymbol}{activeOrder.discountAmount.toFixed(2)}</span>
             </div>
           )}
           <div className="flex justify-between text-neutral-500">
-            <span>Tax (19% VAT)</span>
-            <span className="font-mono">€{activeOrder.tax.toFixed(2)}</span>
+            <span>Tax (13% VAT)</span>
+            <span className="font-mono">{currencySymbol}{activeOrder.tax.toFixed(2)}</span>
           </div>
           <div className="flex justify-between text-neutral-500">
             <span>Artisan Shipping</span>
-            <span className="font-mono">€{activeOrder.shipping.toFixed(2)}</span>
+            <span className="font-mono">{currencySymbol}{activeOrder.shipping.toFixed(2)}</span>
           </div>
           <div className="flex justify-between font-bold text-[#1a1a1a] text-xs pt-1.5 border-t border-dashed border-[#e3e3e3]">
             <span>Invoice Total</span>
-            <span className="font-mono">€{activeOrder.total.toFixed(2)}</span>
+            <span className="font-mono">{currencySymbol}{activeOrder.total.toFixed(2)}</span>
           </div>
         </div>
       </div>

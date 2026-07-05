@@ -57,6 +57,18 @@ export default function ProductsView() {
 
   const currencySymbol = settings.currencySymbol || '€';
 
+  const isUploadedImage = (img?: string) => {
+    return img && (img.startsWith('data:image/') || img.startsWith('http://') || img.startsWith('https://'));
+  };
+
+  const renderProductImage = (image: string, className = "w-10 h-10") => {
+    if (isUploadedImage(image)) {
+      return <img src={image} className={`${className} object-contain rounded-lg`} alt="Product" />;
+    }
+    const svgString = MOCK_PRODUCT_SVGS[image as keyof typeof MOCK_PRODUCT_SVGS] || MOCK_PRODUCT_SVGS.wallet;
+    return <div className={className} dangerouslySetInnerHTML={{ __html: svgString }} />;
+  };
+
   useEffect(() => {
     const handleResize = () => {
       setIsMobile(window.innerWidth < 768);
@@ -81,8 +93,7 @@ export default function ProductsView() {
 
     const handleDeleteCommand = async (productId: string) => {
       deleteProduct(productId);
-      const updatedProducts = products.filter(p => p.id !== productId);
-      await commerceAPI.saveProducts(updatedProducts);
+      await commerceAPI.deleteProduct(productId);
       
       eventBus.emit(ProductEvents.DELETED, { id: productId });
       eventBus.emit(NotificationEvents.CREATED, {
@@ -392,7 +403,6 @@ export default function ProductsView() {
 
           {/* Product Items */}
           {filteredProducts.map((p) => {
-            const svgString = MOCK_PRODUCT_SVGS[p.images[0] as keyof typeof MOCK_PRODUCT_SVGS] || MOCK_PRODUCT_SVGS.wallet;
             const priceVal = currencySymbol + p.price.toFixed(2);
             
             return (
@@ -412,7 +422,7 @@ export default function ProductsView() {
                   
                   {/* Real-time elegant smooth shading card outline background */}
                   <div className="absolute inset-1.5 rounded-md border border-white/45 pointer-events-none" />
-
+ 
                   {/* Absolute Badge Overlays on Image */}
                   <div className="absolute top-1.5 left-1.5 z-10 flex flex-col space-y-1 pointer-events-none">
                     {p.status === 'active' ? (
@@ -429,18 +439,17 @@ export default function ProductsView() {
                       </span>
                     )}
                   </div>
-
+ 
                   {/* Absolute Stock Overlay on Image (Top-Right) */}
                   <div className="absolute top-1.5 right-1.5 z-10 pointer-events-none">
                     <span className="text-[7.5px] text-neutral-600 bg-white/85 border border-neutral-200/25 px-1 py-0.5 rounded-md font-extrabold font-mono shadow-4xs">
                       存 {p.inventory}
                     </span>
                   </div>
-
-                  <div 
-                    className="w-10 h-10 flex items-center justify-center opacity-90 group-hover:scale-110 group-hover:-translate-y-0.5 transition-transform duration-300 drop-shadow-[0_4px_8px_rgba(0,0,0,0.08)] text-neutral-900 filter saturate-[1.05] contrast-[1.02]"
-                    dangerouslySetInnerHTML={{ __html: svgString }} 
-                  />
+ 
+                  <div className="w-10 h-10 flex items-center justify-center opacity-90 group-hover:scale-110 group-hover:-translate-y-0.5 transition-transform duration-300 drop-shadow-[0_4px_8px_rgba(0,0,0,0.08)] text-neutral-900 filter saturate-[1.05] contrast-[1.02]">
+                    {renderProductImage(p.images?.[0] || 'wallet', "w-full h-full")}
+                  </div>
                   
                   {/* Subtle zoom indicator on hover */}
                   <div className="absolute bottom-1 right-1 opacity-0 group-hover:opacity-100 transition-opacity bg-white/90 p-1.5 rounded-full text-neutral-500 shadow-4xs pointer-events-none duration-250 scale-90">
@@ -512,10 +521,9 @@ export default function ProductsView() {
                 <div className="absolute w-44 h-44 bg-white/95 rounded-full blur-xl pointer-events-none opacity-85" />
                 <div className="absolute w-20 h-20 bg-[#008060]/5 rounded-full blur-2xl pointer-events-none" />
 
-                <div 
-                  className="w-28 h-28 flex items-center justify-center text-neutral-950 drop-shadow-[0_16px_28px_rgba(0,0,0,0.13)] relative z-10 animate-pulse duration-[3000ms]"
-                  dangerouslySetInnerHTML={{ __html: MOCK_PRODUCT_SVGS[lightboxProduct.images[0] as keyof typeof MOCK_PRODUCT_SVGS] || MOCK_PRODUCT_SVGS.wallet }} 
-                />
+                <div className="w-28 h-28 flex items-center justify-center text-neutral-950 drop-shadow-[0_16px_28px_rgba(0,0,0,0.13)] relative z-10 animate-pulse duration-[3000ms]">
+                  {renderProductImage(lightboxProduct.images?.[0] || 'wallet', "w-full h-full")}
+                </div>
                 
                 {/* Visual price tag badge */}
                 <div className="absolute bottom-4 right-4 bg-neutral-900 border border-neutral-800 text-white font-mono text-xs font-extrabold py-1 px-2.5 rounded-lg shadow-lg z-10">
@@ -561,28 +569,40 @@ export default function ProductsView() {
                   )}
                 </button>
 
-                {/* BUTTON 2: Real SVG download link execution */}
+                {/* BUTTON 2: Real image download execution */}
                 <button 
                   onClick={() => {
-                    const svgContent = MOCK_PRODUCT_SVGS[lightboxProduct.images[0] as keyof typeof MOCK_PRODUCT_SVGS] || MOCK_PRODUCT_SVGS.wallet;
-                    const blob = new Blob([svgContent], { type: 'image/svg+xml' });
-                    const url = URL.createObjectURL(blob);
-                    const triggerLink = document.createElement('a');
-                    triggerLink.href = url;
-                    triggerLink.download = `${lightboxProduct.title.toLowerCase().replace(/\s+/g, '_')}_emblem.svg`;
-                    document.body.appendChild(triggerLink);
-                    triggerLink.click();
-                    document.body.removeChild(triggerLink);
-                    URL.revokeObjectURL(url);
-
-                    eventBus.emit(NotificationEvents.CREATED, {
-                      text: `💾 商品矢量图像 [${lightboxProduct.title}] 导出下载成功！`
-                    });
+                    const img = lightboxProduct.images?.[0] || 'wallet';
+                    if (isUploadedImage(img)) {
+                      const triggerLink = document.createElement('a');
+                      triggerLink.href = img;
+                      triggerLink.download = `${lightboxProduct.title.toLowerCase().replace(/\s+/g, '_')}_image.png`;
+                      document.body.appendChild(triggerLink);
+                      triggerLink.click();
+                      document.body.removeChild(triggerLink);
+                      eventBus.emit(NotificationEvents.CREATED, {
+                        text: `💾 商品展示图像 [${lightboxProduct.title}] 导出下载成功！`
+                      });
+                    } else {
+                      const svgContent = MOCK_PRODUCT_SVGS[img as keyof typeof MOCK_PRODUCT_SVGS] || MOCK_PRODUCT_SVGS.wallet;
+                      const blob = new Blob([svgContent], { type: 'image/svg+xml' });
+                      const url = URL.createObjectURL(blob);
+                      const triggerLink = document.createElement('a');
+                      triggerLink.href = url;
+                      triggerLink.download = `${lightboxProduct.title.toLowerCase().replace(/\s+/g, '_')}_emblem.svg`;
+                      document.body.appendChild(triggerLink);
+                      triggerLink.click();
+                      document.body.removeChild(triggerLink);
+                      URL.revokeObjectURL(url);
+                      eventBus.emit(NotificationEvents.CREATED, {
+                        text: `💾 商品矢量图像 [${lightboxProduct.title}] 导出下载成功！`
+                      });
+                    }
                   }}
                   className="flex items-center justify-center space-x-1.5 py-2.5 px-3 bg-neutral-900 hover:bg-neutral-800 text-white rounded-lg font-bold text-[10px] select-none transition-all duration-150 cursor-pointer active:scale-95 shadow-sm"
                 >
                   <Download className="w-3.5 h-3.5" />
-                  <span>下载矢量图片</span>
+                  <span>下载商品图片</span>
                 </button>
               </div>
 
@@ -628,10 +648,9 @@ export default function ProductsView() {
               {/* Pulsing indicator */}
               <div className="absolute w-28 h-28 border border-[#008060]/35 rounded-full animate-ping opacity-10 pointer-events-none" />
 
-              <div 
-                className="w-16 h-16 flex items-center justify-center text-white drop-shadow-[0_0_15px_rgba(0,128,96,0.5)] transform group-hover:rotate-12 transition-transform duration-300"
-                dangerouslySetInnerHTML={{ __html: MOCK_PRODUCT_SVGS[scannedProduct.images[0] as keyof typeof MOCK_PRODUCT_SVGS] || MOCK_PRODUCT_SVGS.wallet }} 
-              />
+              <div className="w-16 h-16 flex items-center justify-center text-white drop-shadow-[0_0_15px_rgba(0,128,96,0.5)] transform group-hover:rotate-12 transition-all duration-300">
+                {renderProductImage(scannedProduct.images?.[0] || 'wallet', "w-full h-full")}
+              </div>
               
               <div className="absolute bottom-2 left-3 flex items-center gap-1">
                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
@@ -787,10 +806,9 @@ export default function ProductsView() {
                     <div className="absolute inset-2 border border-dashed border-[#07C2E3]/35 rounded-md animate-pulse pointer-events-none" />
                   )}
 
-                  <div 
-                    className="w-16 h-16 flex items-center justify-center text-neutral-900 group-hover:scale-110 group-hover:-translate-y-1 group-hover:rotate-1 transition-transform duration-300 drop-shadow-[0_8px_16px_rgba(0,0,0,0.06)]"
-                    dangerouslySetInnerHTML={{ __html: MOCK_PRODUCT_SVGS[p.images[0] as keyof typeof MOCK_PRODUCT_SVGS] || MOCK_PRODUCT_SVGS.wallet }} 
-                  />
+                  <div className="w-16 h-16 flex items-center justify-center text-neutral-900 group-hover:scale-110 group-hover:-translate-y-1 group-hover:rotate-1 transition-all duration-300 drop-shadow-[0_8px_16px_rgba(0,0,0,0.06)]">
+                    {renderProductImage(p.images?.[0] || 'wallet', "w-full h-full")}
+                  </div>
 
                   {/* Stock counter indicators on the cards */}
                   <div className="absolute bottom-2 left-2 z-10">

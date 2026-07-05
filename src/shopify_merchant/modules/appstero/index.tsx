@@ -5,6 +5,7 @@ import {
 import { useProductStore } from '../../stores/productStore';
 import { useOrderStore } from '../../stores/orderStore';
 import { useLayoutStore } from '../../stores/layoutStore';
+import { useShopStore } from '../../stores/shopStore';
 import { 
   ArrowLeft, Search, Star, Settings, Check, X, ShieldAlert, Coins, 
   MessageSquare, Truck, Gift, Sparkles, RefreshCw, Send, CheckCircle, 
@@ -28,6 +29,8 @@ export default function AppsteroView({ currentTab }: AppsteroViewProps) {
   const { products } = useProductStore();
   const { orders, setOrders } = useOrderStore();
   const { setCurrentTab } = useLayoutStore();
+  const { settings } = useShopStore();
+  const currencySymbol = settings.currencySymbol || '¥';
 
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
@@ -705,7 +708,7 @@ export default function AppsteroView({ currentTab }: AppsteroViewProps) {
                                 </td>
                                 <td className="p-2 font-mono font-bold text-neutral-700">{o.name}</td>
                                 <td className="p-2 font-medium">{o.customerName}</td>
-                                <td className="p-2 font-mono font-semibold text-[#008060]">€ {o.total}</td>
+                                <td className="p-2 font-mono font-semibold text-[#008060]">{currencySymbol} {o.total}</td>
                               </tr>
                             ))
                           ) : (

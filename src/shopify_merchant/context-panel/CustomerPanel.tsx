@@ -1,5 +1,6 @@
 import React from 'react';
 import { Customer } from '../types';
+import { useShopStore } from '../stores/shopStore';
 
 interface CustomerPanelProps {
   activeCustomer: Customer;
@@ -10,6 +11,9 @@ export default function CustomerPanel({
   activeCustomer,
   handleNotesChange,
 }: CustomerPanelProps) {
+  const { settings } = useShopStore();
+  const currencySymbol = settings.currencySymbol || '¥';
+
   return (
     <div className="space-y-4">
       <div className="bg-white border border-[#e3e3e3] p-4 rounded-lg flex items-center space-x-3 shadow-xs">
@@ -28,7 +32,7 @@ export default function CustomerPanel({
         <div className="grid grid-cols-2 gap-2 text-center font-mono">
           <div className="bg-neutral-50 border border-neutral-200.5 p-2 rounded">
             <span className="text-[10px] text-[#616161]">Total spent</span>
-            <p className="font-bold mt-1 text-sm">€{activeCustomer.totalSpent.toFixed(2)}</p>
+            <p className="font-bold mt-1 text-sm">{currencySymbol}{activeCustomer.totalSpent.toFixed(2)}</p>
           </div>
           <div className="bg-neutral-50 border border-neutral-200.5 p-2 rounded">
             <span className="text-[10px] text-[#616161]">Sessions</span>

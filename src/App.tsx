@@ -593,7 +593,8 @@ export default function App() {
       customers: currentIndustryData.customers || [],
       selectedProductId: currentStoreCtx.ui?.productId,
       selectedOrderId: currentStoreCtx.ui?.orderId,
-      selectedCustomerId: currentStoreCtx.ui?.customerId
+      selectedCustomerId: currentStoreCtx.ui?.customerId,
+      tenantDB: tenantDB
     });
 
     if (currentIndustryData && (currentIndustryData as any).relational && typeof window !== "undefined") {
@@ -844,7 +845,8 @@ export default function App() {
         customers: currentIndustryData.customers,
         selectedProductId: currentStoreCtx.ui?.productId,
         selectedOrderId: currentStoreCtx.ui?.orderId,
-        selectedCustomerId: currentStoreCtx.ui?.customerId
+        selectedCustomerId: currentStoreCtx.ui?.customerId,
+        tenantDB: tenantDB
       });
 
       const response = await fetch('/api/gemini/agent-chat', {

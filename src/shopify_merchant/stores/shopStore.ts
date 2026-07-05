@@ -14,7 +14,16 @@ const getStoredSettings = (): StoreSettings => {
   const saved = localStorage.getItem('shopify_mock_settings');
   if (saved) {
     try {
-      return JSON.parse(saved);
+      const parsed = JSON.parse(saved);
+      // Automatically migrate from EUR to CNY to match the real data specification
+      if (parsed.currency === 'EUR' || !parsed.currency) {
+        parsed.currency = 'CNY';
+        parsed.currencySymbol = '¥';
+        parsed.timezone = 'GMT+8 (Beijing)';
+        parsed.taxRate = 13.00;
+        localStorage.setItem('shopify_mock_settings', JSON.stringify(parsed));
+      }
+      return parsed;
     } catch {
       // ignore
     }

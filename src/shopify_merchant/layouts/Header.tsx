@@ -180,7 +180,7 @@ export default function Header({ onToggleAdminMode }: { onToggleAdminMode?: () =
                             <span className="text-[9.5px] mt-0.5 text-neutral-400 block pb-0">SKU: {p.sku || '-'} • 厂商: {p.vendor || '-'}</span>
                           </div>
                           <div className="text-right shrink-0">
-                            <span className="font-bold text-neutral-950 block">€{p.price}</span>
+                            <span className="font-bold text-neutral-950 block">{settings.currencySymbol || '¥'}{p.price}</span>
                             <span className={`text-[8.5px] px-1.5 py-0.2 rounded font-semibold ${
                               p.inventory > 50 
                                 ? 'bg-emerald-50 text-emerald-700' 

@@ -11,6 +11,12 @@ import SidekickExecutionBridge from "../services/sidekick-execution-bridge";
 import SidekickMemorySystem from "../services/sidekick-memory-system";
 import fs from "fs";
 import path from "path";
+import { 
+  getProducts as getDbProducts, 
+  insertProduct as insertDbProduct, 
+  updateProductInDb as updateDbProduct, 
+  deleteProductInDb as deleteDbProduct 
+} from "../database/db";
 
 const router = express.Router();
 const memorySystem = new SidekickMemorySystem();
@@ -70,46 +76,51 @@ router.post("/chat", async (req: Request, res: Response) => {
     }
 
     // 1. Gather all active products from DB to feed into our thinking engine
-    const db = getLocalDB();
     const activeProducts: any[] = [];
-    if (db && db.tenantDB) {
-      Object.keys(db.tenantDB).forEach(ind => {
-        const indDb = db.tenantDB[ind];
-        if (indDb && indDb.products) {
-          indDb.products.forEach((p: any) => {
-            activeProducts.push({
-              id: p.id,
-              name: p.name,
-              sku: p.sku || "",
-              price: p.price,
-              stock: p.stock !== undefined ? p.stock : (p.inventory !== undefined ? p.inventory : 0),
-              industry: ind
-            });
+    try {
+      const dbProductsList = await getDbProducts(storeId, tenantId);
+      if (dbProductsList && dbProductsList.length > 0) {
+        dbProductsList.forEach((p: any) => {
+          activeProducts.push({
+            id: p.id,
+            name: p.name || p.title || "Untitled Product",
+            sku: p.sku || "",
+            price: Number(p.price) || 0,
+            stock: p.stock !== undefined ? Number(p.stock) : (p.inventory !== undefined ? Number(p.inventory) : 0),
+            category: p.category || "",
+            status: p.status || "active",
+            tags: p.tags || [],
+            vendor: p.vendor || "Default Vendor",
+            description: p.description || ""
+          });
+        });
+      } else {
+        // Fallback to getLocalDB just in case db is empty
+        const db = getLocalDB();
+        if (db && db.tenantDB) {
+          Object.keys(db.tenantDB).forEach(ind => {
+            const indDb = db.tenantDB[ind];
+            if (indDb && indDb.products) {
+              indDb.products.forEach((p: any) => {
+                if (!activeProducts.some(ap => ap.id === p.id)) {
+                  activeProducts.push({
+                    id: p.id,
+                    name: p.name,
+                    sku: p.sku || "",
+                    price: p.price,
+                    stock: p.stock !== undefined ? p.stock : (p.inventory !== undefined ? p.inventory : 0),
+                    category: p.category || "",
+                    status: p.status || "active",
+                    tags: p.tags || []
+                  });
+                }
+              });
+            }
           });
         }
-      });
-    }
-
-    // Pull from dbEngine in memory if available
-    try {
-      const { dbEngine } = require("../db/dbEngine");
-      if (dbEngine && dbEngine.products && typeof dbEngine.products.getAll === 'function') {
-        const localProds = dbEngine.products.getAll() || [];
-        localProds.forEach((p: any) => {
-          if (!activeProducts.some(ap => ap.id === p.id)) {
-            activeProducts.push({
-              id: p.id,
-              name: p.name,
-              sku: p.sku || "",
-              price: p.price,
-              stock: p.inventory !== undefined ? p.inventory : (p.stock !== undefined ? p.stock : 0),
-              industry: "global"
-            });
-          }
-        });
       }
     } catch (e) {
-      console.warn("Could not load dbEngine products on server:", e);
+      console.warn("Failed to query products from db.ts for sidekick context:", e);
     }
 
     // 初始化引擎
@@ -131,41 +142,71 @@ router.post("/chat", async (req: Request, res: Response) => {
     if (aiClient) {
       try {
         const prompt = `You are the self-thinking core brain of AI Commerce OS (Atelier Noir).
-We have a natural language command from the merchant. Your job is to determine if they want to directly perform a database action (like updating a product's price, stock/inventory, deleting a product, adding a product, creating an order, clearing the database, etc.).
+We have a natural language command from the merchant. Your job is to determine if they want to directly perform a database action (like creating a product, updating a product's price, adjusting stock/inventory, deleting a product, setting tags, status, SEO title/description, bulk updating prices, or creating discount coupon codes, etc.).
 
 Active products in the database:
-${JSON.stringify(activeProducts.slice(0, 30), null, 2)}
+${JSON.stringify(activeProducts.slice(0, 40), null, 2)}
 
 User Message: "${message}"
 
-If the user wants to execute a command, please parse it. Supported command types:
-1. "update_product_price": Change a product's price.
-2. "update_product_stock": Change a product's stock/inventory count.
-3. "create_product": Create a new product.
-4. "delete_product": Remove a product.
-5. "clear_database": Remove all products/orders.
-6. "create_order": Create a new order.
-7. "none": Not a database write command (just a question, greeting, or recommendation chat).
+If the user wants to execute a database-changing command, you must parse it. Supported command types:
+1. "create_product": Create a brand-new product. Parse name, SKU (invent one if not provided, e.g. SKU-LINEN-01), retail price, costPrice (cost per item), description, stock (inventory count), category/type, status ("active" or "draft"), tags (array of strings, e.g. ["linen", "shirt"]), vendor, and compareAtPrice (划线价 / comparison price).
+2. "update_product": Edit/update an existing product. You MUST identify the correct "productId" from the active products list. Parse fields to change: name, price, costPrice, description, SKU, stock/inventory, category, status, tags (add or replace tags), compareAtPrice, vendor, and SEO parameters (seoTitle, seoDescription).
+3. "delete_product": Permanently delete/remove a product. Identify "productId" from active products list.
+4. "adjust_inventory": Adjust stock/inventory for a product. Identify "productId". Parse "stock" as absolute target, OR "adjustment" as a relative change (e.g. +50, -100).
+5. "bulk_update_products": Bulk modify multiple products. E.g. "Increase all shirt prices by 10%" or "Change status of all products in category Apparel to active".
+   Parameters:
+   - "category": filter by category (if specified)
+   - "tag": filter by tag (if specified)
+   - "priceMultiplier": number (e.g. 1.1 for 10% increase, 0.9 for 10% discount)
+   - "status": bulk set status (e.g., "active" or "draft")
+   - "addTag": string to append
+   - "removeTag": string to delete
+6. "create_discount": Create a new discount code. Parse code (e.g., "SUMMER50"), discountType ("percentage" or "fixed_amount"), and value (e.g. 50 or 15).
+7. "none": Not a database write command (just a regular question, greeting, performance check, or strategy planning chat).
 
-Return a JSON object in this format:
+Return a JSON object in this exact format:
 {
   "isCommand": true | false,
-  "commandType": "update_product_price" | "update_product_stock" | "create_product" | "delete_product" | "clear_database" | "create_order" | "none",
+  "commandType": "create_product" | "update_product" | "delete_product" | "adjust_inventory" | "bulk_update_products" | "create_discount" | "none",
   "parameters": {
     "productId": "string (the matched product ID, e.g. p_r1)",
     "productName": "string",
+    "name": "string (for new product name)",
     "price": number,
+    "costPrice": number,
+    "compareAtPrice": number,
     "stock": number,
+    "adjustment": number,
     "sku": "string",
-    "name": "string (for new product or customer)",
     "category": "string",
-    "description": "string"
+    "description": "string",
+    "status": "active" | "draft",
+    "tags": ["string"],
+    "vendor": "string",
+    "seoTitle": "string",
+    "seoDescription": "string",
+    "bulkFilters": {
+      "category": "string",
+      "tag": "string"
+    },
+    "bulkUpdates": {
+      "priceMultiplier": number,
+      "status": "active" | "draft",
+      "addTag": "string",
+      "removeTag": "string"
+    },
+    "discount": {
+      "code": "string",
+      "discountType": "percentage" | "fixed_amount",
+      "value": number
+    }
   },
   "thinking": "Write a 1-sentence deep strategic rationale of why and how you are executing this command immediately.",
-  "responseMessage": "The message to return to the user confirming the execution in a highly professional, Shopify Sidekick tone. Make sure to mention that the database has been updated in real-time."
+  "responseMessage": "The message to return to the user confirming the execution in a highly professional, Shopify Sidekick tone. Make sure to describe specifically what was updated, added, or changed in real-time."
 }
 
-Only return valid JSON. Do not return markdown tags or extra text.`;
+Only return valid JSON. Do not wrap in markdown or block code. Ensure all numeric parameters are typed as numbers, not strings.`;
 
         const geminiRes = await aiClient.models.generateContent({
           model: "gemini-2.5-flash",
@@ -273,7 +314,7 @@ Only return valid JSON. Do not return markdown tags or extra text.`;
       } else if (targetPrice !== null && matchedProd) {
         commandResult = {
           isCommand: true,
-          commandType: "update_product_price",
+          commandType: "update_product",
           parameters: {
             productId: matchedProd.id,
             productName: matchedProd.name,
@@ -285,7 +326,7 @@ Only return valid JSON. Do not return markdown tags or extra text.`;
       } else if (targetStock !== null && matchedProd) {
         commandResult = {
           isCommand: true,
-          commandType: "update_product_stock",
+          commandType: "adjust_inventory",
           parameters: {
             productId: matchedProd.id,
             productName: matchedProd.name,
@@ -299,123 +340,188 @@ Only return valid JSON. Do not return markdown tags or extra text.`;
 
     // 4. If a direct command was identified, execute updates to DB and return immediately
     if (commandResult && commandResult.isCommand) {
-      const localDb = getLocalDB();
       let dbUpdated = false;
+      const type = commandResult.commandType;
+      const params = commandResult.parameters || {};
 
-      // Update server_db.json
-      if (localDb && localDb.tenantDB) {
-        if (commandResult.commandType === "update_product_price") {
-          Object.keys(localDb.tenantDB).forEach(ind => {
-            const indDb = localDb.tenantDB[ind];
-            if (indDb && indDb.products) {
-              indDb.products = indDb.products.map((p: any) => {
-                if (p.id === commandResult.parameters.productId || p.name === commandResult.parameters.productName) {
-                  p.price = commandResult.parameters.price;
-                  dbUpdated = true;
-                }
-                return p;
-              });
+      if (type === "create_product") {
+        const newId = params.productId || `prod_${Date.now()}`;
+        const newProd = {
+          id: newId,
+          storeId,
+          tenantId,
+          sku: params.sku || `SKU-${Date.now().toString().slice(-4)}`,
+          name: params.name || params.productName || "新商品",
+          description: params.description || "",
+          price: params.price !== undefined ? Number(params.price) : 99.00,
+          costPrice: params.costPrice !== undefined ? Number(params.costPrice) : 0,
+          stock: params.stock !== undefined ? Number(params.stock) : 100,
+          minStock: 10,
+          category: params.category || "General",
+          status: params.status || "active",
+          tags: params.tags || [],
+          compareAtPrice: params.compareAtPrice || 0,
+          vendor: params.vendor || "Default Vendor",
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString()
+        };
+        await insertDbProduct(newProd);
+        dbUpdated = true;
+        params.productId = newId;
+      } 
+      else if (type === "update_product_price" || type === "update_product") {
+        const pId = params.productId;
+        if (pId) {
+          const updatePayload: any = {};
+          if (params.name) updatePayload.name = params.name;
+          if (params.price !== undefined) updatePayload.price = Number(params.price);
+          if (params.costPrice !== undefined) updatePayload.costPrice = Number(params.costPrice);
+          if (params.compareAtPrice !== undefined) updatePayload.compareAtPrice = Number(params.compareAtPrice);
+          if (params.stock !== undefined) {
+            updatePayload.stock = Number(params.stock);
+            updatePayload.inventory = Number(params.stock);
+          }
+          if (params.sku) updatePayload.sku = params.sku;
+          if (params.category) updatePayload.category = params.category;
+          if (params.description) updatePayload.description = params.description;
+          if (params.status) updatePayload.status = params.status;
+          if (params.tags) updatePayload.tags = params.tags;
+          if (params.vendor) updatePayload.vendor = params.vendor;
+          if (params.seoTitle) updatePayload.seoTitle = params.seoTitle;
+          if (params.seoDescription) updatePayload.seoDescription = params.seoDescription;
+
+          await updateDbProduct(pId, storeId, tenantId, updatePayload);
+          dbUpdated = true;
+        }
+      } 
+      else if (type === "update_product_stock" || type === "adjust_inventory") {
+        const pId = params.productId;
+        if (pId) {
+          const allProds = await getDbProducts(storeId, tenantId);
+          const matched = allProds.find((p: any) => p.id === pId);
+          if (matched) {
+            const currentStock = matched.stock !== undefined ? Number(matched.stock) : (matched.inventory !== undefined ? Number(matched.inventory) : 0);
+            let targetStock = currentStock;
+            if (params.stock !== undefined) {
+              targetStock = Number(params.stock);
+            } else if (params.adjustment !== undefined) {
+              targetStock = currentStock + Number(params.adjustment);
             }
-          });
-        } else if (commandResult.commandType === "update_product_stock") {
-          Object.keys(localDb.tenantDB).forEach(ind => {
-            const indDb = localDb.tenantDB[ind];
-            if (indDb && indDb.products) {
-              indDb.products = indDb.products.map((p: any) => {
-                if (p.id === commandResult.parameters.productId || p.name === commandResult.parameters.productName) {
-                  p.stock = commandResult.parameters.stock;
-                  p.inventory = commandResult.parameters.stock;
-                  p.status = commandResult.parameters.stock > 0 ? "In Stock" : "Out of Stock";
-                  dbUpdated = true;
-                }
-                return p;
-              });
-            }
-          });
-        } else if (commandResult.commandType === "delete_product") {
-          Object.keys(localDb.tenantDB).forEach(ind => {
-            const indDb = localDb.tenantDB[ind];
-            if (indDb && indDb.products) {
-              const initialLen = indDb.products.length;
-              indDb.products = indDb.products.filter((p: any) => p.id !== commandResult.parameters.productId && p.name !== commandResult.parameters.productName);
-              if (indDb.products.length !== initialLen) {
-                dbUpdated = true;
-              }
-            }
-          });
-        } else if (commandResult.commandType === "clear_database") {
-          Object.keys(localDb.tenantDB).forEach(ind => {
-            if (localDb.tenantDB[ind]) {
-              localDb.tenantDB[ind].products = [];
-              localDb.tenantDB[ind].orders = [];
-              dbUpdated = true;
-            }
-          });
-        } else if (commandResult.commandType === "create_product") {
-          const industry = tenantId.replace("t_", "") || "retail";
-          const indDb = localDb.tenantDB[industry] || localDb.tenantDB["retail"];
-          if (indDb && indDb.products) {
-            const newId = "p_" + Date.now();
-            const newProd = {
-              id: newId,
-              name: commandResult.parameters.name || commandResult.parameters.productName || "新商品",
-              sku: commandResult.parameters.sku || "SKU-" + Date.now().toString().slice(-4),
-              stock: commandResult.parameters.stock !== undefined ? commandResult.parameters.stock : 100,
-              minStockThreshold: 10,
-              price: commandResult.parameters.price !== undefined ? commandResult.parameters.price : 99.0,
-              sales: 0,
-              status: "In Stock"
-            };
-            indDb.products.push(newProd);
+            await updateDbProduct(pId, storeId, tenantId, { 
+              stock: targetStock,
+              inventory: targetStock,
+              status: targetStock > 0 ? "active" : "draft"
+            });
             dbUpdated = true;
-            commandResult.parameters.productId = newId;
           }
         }
-      }
+      } 
+      else if (type === "delete_product") {
+        const pId = params.productId;
+        if (pId) {
+          await deleteDbProduct(pId, storeId, tenantId);
+          dbUpdated = true;
+        }
+      } 
+      else if (type === "bulk_update_products") {
+        const allProds = await getDbProducts(storeId, tenantId);
+        const filters = params.bulkFilters || {};
+        const updates = params.bulkUpdates || {};
 
-      // Sync and save server_db.json
-      if (dbUpdated) {
-        saveLocalDB(localDb);
+        let matchedCount = 0;
+        for (const p of allProds) {
+          let isMatch = true;
+          if (filters.category && p.category !== filters.category) isMatch = false;
+          if (filters.tag && (!p.tags || !p.tags.includes(filters.tag))) isMatch = false;
+
+          if (isMatch) {
+            matchedCount++;
+            const updatePayload: any = {};
+            if (updates.priceMultiplier !== undefined) {
+              const currentPrice = Number(p.price) || 0;
+              updatePayload.price = Number((currentPrice * Number(updates.priceMultiplier)).toFixed(2));
+            }
+            if (updates.status) {
+              updatePayload.status = updates.status;
+            }
+            if (updates.addTag) {
+              const currentTags = p.tags || [];
+              if (!currentTags.includes(updates.addTag)) {
+                updatePayload.tags = [...currentTags, updates.addTag];
+              }
+            }
+            if (updates.removeTag) {
+              const currentTags = p.tags || [];
+              updatePayload.tags = currentTags.filter((t: string) => t !== updates.removeTag);
+            }
+
+            await updateDbProduct(p.id, storeId, tenantId, updatePayload);
+          }
+        }
+        if (matchedCount > 0) {
+          dbUpdated = true;
+        }
+      } 
+      else if (type === "create_discount") {
+        const discountCode = params.discount?.code;
+        if (discountCode) {
+          const localDb = getLocalDB();
+          if (localDb) {
+            if (!localDb.discountDrafts) localDb.discountDrafts = [];
+            const newDiscount = {
+              id: `disc_${Date.now()}`,
+              code: discountCode,
+              type: params.discount.discountType || "percentage",
+              value: Number(params.discount.value) || 10,
+              status: "active",
+              createdAt: new Date().toISOString()
+            };
+            localDb.discountDrafts.push(newDiscount);
+            saveLocalDB(localDb);
+            dbUpdated = true;
+          }
+        }
+      } 
+      else if (type === "clear_database") {
+        const allProds = await getDbProducts(storeId, tenantId);
+        for (const p of allProds) {
+          await deleteDbProduct(p.id, storeId, tenantId);
+        }
+        dbUpdated = true;
       }
 
       // Synchronize in-memory dbEngine
       try {
         const { dbEngine } = require("../db/dbEngine");
-        if (dbEngine && dbEngine.products) {
-          if (commandResult.commandType === "update_product_price") {
-            const matched = dbEngine.products.getAll().find((p: any) => p.id === commandResult.parameters.productId || p.name === commandResult.parameters.productName);
-            if (matched) {
-              dbEngine.products.update(matched.id, { price: commandResult.parameters.price });
+        if (dbEngine && dbEngine.products && typeof dbEngine.products.getAll === 'function') {
+          const freshProds = await getDbProducts(storeId, tenantId);
+          const existingEngineProds = dbEngine.products.getAll() || [];
+          existingEngineProds.forEach((ep: any) => {
+            if (ep.storeId === storeId && ep.tenantId === tenantId) {
+              dbEngine.products.delete(ep.id);
             }
-          } else if (commandResult.commandType === "update_product_stock") {
-            const matched = dbEngine.products.getAll().find((p: any) => p.id === commandResult.parameters.productId || p.name === commandResult.parameters.productName);
-            if (matched) {
-              dbEngine.products.update(matched.id, { 
-                inventory: commandResult.parameters.stock,
-                stock: commandResult.parameters.stock
-              });
-            }
-          } else if (commandResult.commandType === "delete_product") {
-            const matched = dbEngine.products.getAll().find((p: any) => p.id === commandResult.parameters.productId || p.name === commandResult.parameters.productName);
-            if (matched) {
-              dbEngine.products.delete(matched.id);
-            }
-          } else if (commandResult.commandType === "clear_database") {
-            const prods = dbEngine.products.getAll() || [];
-            prods.forEach((p: any) => dbEngine.products.delete(p.id));
-          } else if (commandResult.commandType === "create_product") {
+          });
+          freshProds.forEach((fp: any) => {
             dbEngine.products.create({
-              name: commandResult.parameters.name || commandResult.parameters.productName || "新商品",
-              sku: commandResult.parameters.sku || "SKU-" + Date.now().toString().slice(-4),
-              inventory: commandResult.parameters.stock !== undefined ? commandResult.parameters.stock : 100,
-              price: commandResult.parameters.price !== undefined ? commandResult.parameters.price : 99.0,
+              id: fp.id,
+              name: fp.name || fp.title || "Untitled",
+              sku: fp.sku || "",
+              inventory: fp.stock !== undefined ? Number(fp.stock) : (fp.inventory !== undefined ? Number(fp.inventory) : 0),
+              price: Number(fp.price) || 0,
+              costPrice: Number(fp.costPrice) || 0,
+              compareAtPrice: Number(fp.compareAtPrice) || 0,
+              category: fp.category || "",
+              status: fp.status || "active",
+              tags: fp.tags || [],
+              vendor: fp.vendor || "",
+              description: fp.description || "",
               storeId: storeId,
               tenantId: tenantId
             });
-          }
+          });
         }
       } catch (e) {
-        console.warn("Failed to update in-memory dbEngine on server:", e);
+        console.warn("Failed to synchronize dbEngine products:", e);
       }
 
       // Log direct natural language execution details in Audit Logs and Humility Records
@@ -426,23 +532,22 @@ Only return valid JSON. Do not return markdown tags or extra text.`;
           userId: "Sidekick (Self-Thinking Brain)",
           action: "DIRECT_NATURAL_LANGUAGE_WRITE",
           resourceType: "database",
-          resourceId: commandResult.parameters.productId || "all",
+          resourceId: params.productId || "all",
           beforeJson: JSON.stringify({ message: "NL Command Executed" }),
-          afterJson: JSON.stringify({ command: commandResult.commandType, parameters: commandResult.parameters }),
+          afterJson: JSON.stringify({ command: type, parameters: params }),
           createdAt: new Date().toISOString()
         };
-        const latestDb = getLocalDB() || localDb;
+        const latestDb = getLocalDB();
         if (latestDb) {
           if (!latestDb.auditLogs) latestDb.auditLogs = [];
           latestDb.auditLogs.unshift(newLog);
           
-          // Also append dynamic AI humility record
           const newHumility = {
             id: `HUM_${Date.now()}`,
             timestamp: new Date().toISOString(),
-            decision_type: commandResult.commandType,
+            decision_type: type,
             cognitive_rationales: [commandResult.thinking],
-            calibration_index: 0.98,
+            calibration_index: 0.99,
             evidence_sufficiency: "ABSOLUTE_MERCHANT_INTENT",
             is_overruled: false
           };
@@ -450,7 +555,6 @@ Only return valid JSON. Do not return markdown tags or extra text.`;
           latestDb.decision_humility_records.unshift(newHumility);
           saveLocalDB(latestDb);
 
-          // Write humility record to dbEngine
           const { dbEngine } = require("../db/dbEngine");
           if (dbEngine && dbEngine.decision_humility_records && typeof dbEngine.decision_humility_records.create === 'function') {
             dbEngine.decision_humility_records.create(newHumility);
@@ -466,13 +570,14 @@ Only return valid JSON. Do not return markdown tags or extra text.`;
         data: {
           message: commandResult.responseMessage,
           type: "general" as const,
+          reloadSignal: true,
           followUpQuestions: [
-            "还有什么其他我可以帮您直接修改的商品吗？",
-            "帮我查看最新的商品与库存大盘情况"
+            "还有什么其他我可以帮您修改或同步的吗？",
+            "帮我查看目前的库存水位以及警告"
           ],
           suggestedActions: [],
           thinking: {
-            intent: "直接数据库命令执行 (" + commandResult.commandType + ")",
+            intent: "直接数据库命令执行 (" + type + ")",
             confidence: 0.99,
             reasoning: commandResult.thinking
           }

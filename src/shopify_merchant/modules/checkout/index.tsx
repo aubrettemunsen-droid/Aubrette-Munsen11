@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useCheckoutStore } from '../../stores/checkoutStore';
+import { useShopStore } from '../../stores/shopStore';
 import { 
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell 
 } from 'recharts';
@@ -11,6 +12,8 @@ import { Badge } from '../../components/ui/Badge';
 
 export default function CheckoutView() {
   const { checkoutConfig, funnelMetrics, loading, hydrateCheckout, updateCheckoutConfig } = useCheckoutStore();
+  const { settings } = useShopStore();
+  const currencySymbol = settings.currencySymbol || '¥';
   const [accentCode, setAccentCode] = useState('#111111');
   const [toastMsg, setToastMsg] = useState<string | null>(null);
 
@@ -327,7 +330,7 @@ export default function CheckoutView() {
                 style={{ backgroundColor: accentCode }}
                 className="w-full text-white py-2 text-[10px] tracking-wider rounded-lg font-bold font-mono transition-opacity hover:opacity-85"
               >
-                COMPILE AND ORDER PAY (实付 €350)
+                COMPILE AND ORDER PAY (实付 {currencySymbol}350)
               </button>
             </div>
           </div>

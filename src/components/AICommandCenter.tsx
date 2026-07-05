@@ -30,12 +30,116 @@ import {
 } from 'lucide-react';
 import { IndustryType, ProductItem, OrderItem, CustomerItem } from '../types';
 import { aiRuntimeStore } from '../store/aiRuntimeStore';
-import { AIContextService } from '../services/AIContextService';
+import { AIContextService, AIDecisionTracker } from '../services/AIContextService';
 import { BrainAPIGateway } from '../services/brain/BrainAPIGateway';
 import { dbEngine } from '../db/dbEngine';
 import Markdown from 'react-markdown';
 import { generateIntelligentLocalReply } from '../utils/intelligentFallback';
 import { StatefulContextBuilder } from '../services/StatefulContextBuilder';
+
+export function parseInlineThought(content: string) {
+  const currentCtx = aiRuntimeStore.getContext();
+  const { cleanContent, thought } = AIDecisionTracker.parseAndTrack(content, currentCtx);
+  return { cleanContent, thoughtObj: thought };
+}
+
+export function ThoughtBlock({ thought }: { thought: any }) {
+  const [isOpen, setIsOpen] = useState(false);
+
+  if (!thought) return null;
+
+  // Extract fields safely
+  const intent = thought.intent || 'GENERAL_QUERY';
+  const reasoning = thought.reasoning || '';
+  const planning = thought.planning || '';
+  const permission = thought.permission || 'READONLY_PERMITTED';
+  const validator = thought.validator || 'SUCCESS';
+  const confidence = typeof thought.confidence === 'number' ? thought.confidence : 0.95;
+  const selfAssessment = thought.selfAssessment || '';
+
+  return (
+    <div className="mt-2.5 mb-2 border border-[#2d2e30]/80 rounded-xl overflow-hidden bg-slate-950/95 font-mono text-[10.5px]">
+      <button
+        type="button"
+        onClick={() => setIsOpen(!isOpen)}
+        className="w-full flex items-center justify-between p-2.5 px-3 bg-[#16171a] text-slate-350 hover:text-white hover:bg-[#1a1b1f] transition-all cursor-pointer font-sans"
+      >
+        <div className="flex items-center gap-1.5 font-bold">
+          <Brain className="w-3.5 h-3.5 text-cyan-450 animate-pulse" />
+          <span>脑内核决策追踪器 (Enterprise Brain Decision Tracker)</span>
+        </div>
+        <div className="flex items-center gap-1">
+          <span className="text-[8px] px-1.5 py-0.5 rounded bg-cyan-500/10 text-cyan-400 border border-cyan-500/25 uppercase font-bold tracking-tight">
+            {intent}
+          </span>
+          {isOpen ? (
+            <ChevronUp className="w-3.5 h-3.5 text-slate-400" />
+          ) : (
+            <ChevronDown className="w-3.5 h-3.5 text-slate-400" />
+          )}
+        </div>
+      </button>
+
+      {isOpen && (
+        <div className="p-3 space-y-2.5 border-t border-[#2d2e30]/50 text-slate-300 divide-y divide-[#2d2e30]/30 select-text">
+          {/* Reasoning / 深度推理 */}
+          <div className="pb-2 space-y-1">
+            <span className="text-[9px] text-[#07C2E3] font-bold tracking-wider uppercase flex items-center gap-1">
+              <Cpu className="w-3 h-3 text-cyan-400" /> [Reasoning / 逻辑推理]
+            </span>
+            <p className="text-slate-300 leading-relaxed font-sans whitespace-pre-line pl-1">
+              {reasoning}
+            </p>
+          </div>
+
+          {/* Planning / 执行规划 */}
+          {planning && (
+            <div className="pt-2.5 pb-2 space-y-1">
+              <span className="text-[9px] text-[#07C2E3] font-bold tracking-wider uppercase flex items-center gap-1">
+                <Zap className="w-3 h-3 text-cyan-400" /> [Planning / 执行规划]
+              </span>
+              <p className="text-slate-300 leading-relaxed font-sans whitespace-pre-line pl-1 text-[10px]">
+                {planning}
+              </p>
+            </div>
+          )}
+
+          {/* Self-Assessment / 决策自评估 */}
+          {selfAssessment && (
+            <div className="pt-2.5 pb-2 space-y-1">
+              <span className="text-[9px] text-[#07C2E3] font-bold tracking-wider uppercase flex items-center gap-1">
+                <ShieldCheck className="w-3 h-3 text-cyan-400" /> [Self-Assessment / 决策自评估]
+              </span>
+              <p className="text-slate-300 leading-relaxed font-sans whitespace-pre-line pl-1 text-[10px] bg-slate-900/60 p-2 rounded-lg border border-[#2d2e30]/40">
+                {selfAssessment}
+              </p>
+            </div>
+          )}
+
+          {/* Meta metrics / 权限、安全校验、置信度 */}
+          <div className="pt-2.5 grid grid-cols-3 gap-3 text-[9px] font-semibold text-slate-400">
+            <div>
+              <span className="block text-slate-500 font-bold uppercase tracking-wide">Permission Engine</span>
+              <span className="text-slate-300 mt-0.5 block truncate font-mono text-[8.5px]">{permission}</span>
+            </div>
+            <div>
+              <span className="block text-slate-500 font-bold uppercase tracking-wide">Governance Validator</span>
+              <span className={`mt-0.5 block truncate font-mono text-[8.5px] ${validator.includes('FAIL') ? 'text-amber-400' : 'text-emerald-400 font-bold'}`}>
+                {validator}
+              </span>
+            </div>
+            <div>
+              <span className="block text-slate-500 font-bold uppercase tracking-wide">Decision Confidence</span>
+              <span className="text-cyan-400 font-extrabold mt-0.5 block font-mono text-[10px]">
+                {(confidence * 100).toFixed(1)}%
+              </span>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
 
 interface AICommandCenterProps {
   isOpen: boolean;
@@ -1645,11 +1749,19 @@ ${warningProducts.map(p => `- **${p.name}** (\`${p.sku}\`): 目前库存 **${p.s
             >
               {msg.role === 'user' ? (
                 <p className="whitespace-pre-line font-bold leading-relaxed font-sans">{msg.content}</p>
-              ) : (
-                <div className="markdown-body font-sans text-slate-350 space-y-2">
-                  <Markdown>{msg.content}</Markdown>
-                </div>
-              )}
+              ) : (() => {
+                const parsed = parseInlineThought(msg.content);
+                const displayContent = parsed.thoughtObj ? parsed.cleanContent : msg.content;
+                const displayThought = msg.thought || parsed.thoughtObj;
+                return (
+                  <>
+                    <div className="markdown-body font-sans text-slate-350 space-y-2">
+                      <Markdown>{displayContent}</Markdown>
+                    </div>
+                    {displayThought && <ThoughtBlock thought={displayThought} />}
+                  </>
+                );
+              })()}
 
               {/* Model Router Panel */}
               {msg.role === 'assistant' && msg.modelRouter && (

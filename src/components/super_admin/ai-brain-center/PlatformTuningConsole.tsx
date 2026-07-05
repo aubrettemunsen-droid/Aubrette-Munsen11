@@ -104,7 +104,6 @@ interface SystemPromptTemplate {
 
 export default function PlatformTuningConsole() {
   const [activeSubTab, setActiveSubTab] = useState<'models' | 'dataset' | 'data-engine' | 'continual' | 'train' | 'eval' | 'prompt' | 'monitor' | 'playground' | 'modagpt-loop'>('modagpt-loop');
-  const [workspaceView, setWorkspaceView] = useState<'chat' | 'logs'>('chat');
   
   // Datasets state
   const [datasets, setDatasets] = useState<DatasetItem[]>([]);
@@ -160,64 +159,8 @@ export default function PlatformTuningConsole() {
   });
   const [loopReflection, setLoopReflection] = useState('');
   const [loopRePlan, setLoopRePlan] = useState('');
-  const [loopThought, setLoopThought] = useState('');
   const [loopAnimatedLogs, setLoopAnimatedLogs] = useState<string[]>([]);
   const [loopAnimatedTools, setLoopAnimatedTools] = useState<any[]>([]);
-
-  // Multi-turn ChatGPT & Sidekick chat persistent state variables
-  const [loopChatHistory, setLoopChatHistory] = useState<any[]>([
-    {
-      id: "msg_init",
-      sender: "assistant",
-      text: "您好！我是 ModaGPT 唯一核心主脑 Executive Brain。作为您的商业 COO，我时刻守卫着您的店铺资产与大盘水位，并通过大宪章底线自愈风险。请问您今天有什么需要我协助规划或自动执行的商业目标？",
-      timestamp: new Date().toISOString(),
-      thoughtOutput: "主脑就绪，等待下发目标。已就地对位 ECOS 大宪章及物理货架隔离保护。",
-      logs: ["[BOOT] 正在启动 ModaGPT 唯一核心主脑 Executive Brain...", "ModaGPT 认知运行时就绪，等待商家下达目标。"],
-      toolCalls: []
-    }
-  ]);
-  const [loopProposedPlan, setLoopProposedPlan] = useState<any[] | null>(null);
-  const [loopRequiresApproval, setLoopRequiresApproval] = useState(false);
-  const [loopIsClarificationNeeded, setLoopIsClarificationNeeded] = useState(false);
-  const [expandedThoughts, setExpandedThoughts] = useState<Record<string, boolean>>({});
-
-  // Sync historical states on mount
-  useEffect(() => {
-    const fetchHistory = async () => {
-      try {
-        const res = await fetch('/api/modagpt/loop', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ action: 'get_history' })
-        });
-        const data = await res.json();
-        if (data.success) {
-          if (data.chatHistory && data.chatHistory.length > 0) {
-            setLoopChatHistory(data.chatHistory);
-            const lastMsg = data.chatHistory[data.chatHistory.length - 1];
-            if (lastMsg.proposedPlan && lastMsg.proposedPlan.length > 0) {
-              setLoopProposedPlan(lastMsg.proposedPlan);
-              setLoopRequiresApproval(lastMsg.requiresApproval || false);
-            } else {
-              setLoopProposedPlan(null);
-              setLoopRequiresApproval(false);
-            }
-            setLoopIsClarificationNeeded(lastMsg.isClarificationNeeded || false);
-            setLoopThought(lastMsg.thoughtOutput || lastMsg.text || '');
-            if (lastMsg.logs && lastMsg.logs.length > 0) {
-              setLoopAnimatedLogs(lastMsg.logs);
-            }
-          }
-          if (data.aiState) {
-            setLoopState(data.aiState);
-          }
-        }
-      } catch (e) {
-        console.error("Failed to fetch ModaGPT history on mount", e);
-      }
-    };
-    fetchHistory();
-  }, []);
 
   const handleRunLoop = async () => {
     if (!loopGoal.trim()) return;
@@ -226,88 +169,17 @@ export default function PlatformTuningConsole() {
     setLoopAnimatedTools([]);
     setLoopReflection('');
     setLoopRePlan('');
-    setLoopThought('');
 
     try {
       const res = await fetch('/api/modagpt/loop', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ goal: loopGoal, action: 'message' })
+        body: JSON.stringify({ goal: loopGoal })
       });
       const data = await res.json();
       if (data.success) {
-        const lastMsg = data.chatHistory[data.chatHistory.length - 1];
-        const fullLogs = lastMsg?.logs || [];
-        const fullTools = lastMsg?.proposedPlan || [];
-
-        let currentLogIndex = 0;
-        let currentToolIndex = 0;
-
-        // Reset text goal input to represent active sending like ChatGPT
-        setLoopGoal('');
-
-        const logInterval = setInterval(() => {
-          if (currentLogIndex < fullLogs.length) {
-            const nextLog = fullLogs[currentLogIndex];
-            setLoopAnimatedLogs(prev => [...prev, nextLog]);
-            currentLogIndex++;
-
-            if (nextLog.includes("正在调用") || nextLog.includes("成功编译")) {
-              const matchedTool = fullTools[currentToolIndex];
-              if (matchedTool) {
-                setLoopAnimatedTools(prev => {
-                  if (prev.some(t => t.tool === matchedTool.tool)) {
-                    return prev.map(t => t.tool === matchedTool.tool ? matchedTool : t);
-                  } else {
-                    return [...prev, matchedTool];
-                  }
-                });
-                if (nextLog.includes("成功编译") || nextLog.includes("调用成功")) {
-                  currentToolIndex++;
-                }
-              }
-            }
-          } else {
-            clearInterval(logInterval);
-            setLoopChatHistory(data.chatHistory || []);
-            setLoopState(data.aiState);
-            setLoopIsClarificationNeeded(lastMsg?.isClarificationNeeded || false);
-            setLoopRequiresApproval(lastMsg?.requiresApproval || false);
-            setLoopProposedPlan(lastMsg?.proposedPlan || null);
-            setLoopThought(lastMsg?.thoughtOutput || lastMsg?.text || '');
-            setLoopReflection('');
-            setLoopRePlan('');
-            setLoopLoading(false);
-          }
-        }, 150);
-      } else {
-        setLoopAnimatedLogs(prev => [...prev, `❌ 错误: ${data.error || '执行认知循环失败'}`]);
-        setLoopLoading(false);
-      }
-    } catch (e: any) {
-      setLoopAnimatedLogs(prev => [...prev, `❌ 异常: ${e.message || '网络连接异常'}`]);
-      setLoopLoading(false);
-    }
-  };
-
-  const handleApproveExecute = async () => {
-    setLoopLoading(true);
-    setLoopAnimatedLogs([`[BOOT] 收到商家安全审批。主脑 Executive Brain 物理锁定 Tool Loop 运行时...`]);
-    setLoopAnimatedTools([]);
-    setLoopReflection('');
-    setLoopRePlan('');
-
-    try {
-      const res = await fetch('/api/modagpt/loop', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'execute_approved' })
-      });
-      const data = await res.json();
-      if (data.success) {
-        const lastMsg = data.chatHistory[data.chatHistory.length - 1];
-        const fullLogs = lastMsg?.logs || [];
-        const fullTools = lastMsg?.toolCalls || [];
+        const fullLogs = data.logs;
+        const fullTools = data.toolCalls;
 
         let currentLogIndex = 0;
         let currentToolIndex = 0;
@@ -323,7 +195,7 @@ export default function PlatformTuningConsole() {
               if (matchedTool) {
                 setLoopAnimatedTools(prev => {
                   if (prev.some(t => t.tool === matchedTool.tool)) {
-                    return prev.map(t => t.tool === matchedTool.tool ? { ...t, ...matchedTool } : t);
+                    return prev.map(t => t.tool === matchedTool.tool ? matchedTool : t);
                   } else {
                     return [...prev, matchedTool];
                   }
@@ -335,68 +207,18 @@ export default function PlatformTuningConsole() {
             }
           } else {
             clearInterval(logInterval);
-            setLoopChatHistory(data.chatHistory || []);
             setLoopState(data.aiState);
-            setLoopIsClarificationNeeded(false);
-            setLoopRequiresApproval(false);
-            setLoopProposedPlan(null);
-            setLoopThought(lastMsg?.text || '');
-            setLoopReflection(data.aiState?.memory?.shortTerm?.slice(-1)[0]?.text || "执行审计结论：本次精密极速建店与产品投放指令全数执行绿通。已完全保证毛利率不穿透 35% 红线。");
-            setLoopRePlan("1. 在 48 小时后监控 Meta 与 TikTok 广告点击率 (CTR) 与加购率 (ATC)；\n2. 自动根据点击数据启动下一轮价格弹性 (Pricing Elasticity) 微调；\n3. 启动法国海外仓每日仓储水位智能对账，自动起草安全补货调配。");
+            setLoopReflection(data.reflection);
+            setLoopRePlan(data.rePlan);
             setLoopLoading(false);
           }
-        }, 150);
+        }, 300);
       } else {
-        setLoopAnimatedLogs(prev => [...prev, `❌ 错误: ${data.error || '执行计划失败'}`]);
+        setLoopAnimatedLogs(prev => [...prev, `❌ 错误: ${data.error || '执行认知循环失败'}`]);
         setLoopLoading(false);
       }
     } catch (e: any) {
       setLoopAnimatedLogs(prev => [...prev, `❌ 异常: ${e.message || '网络连接异常'}`]);
-      setLoopLoading(false);
-    }
-  };
-
-  const handleResetLoop = async () => {
-    if (!window.confirm("确定要清空当前 ModaGPT 所有的历史会话、决策缓存并重置 AI 状态吗？")) return;
-    setLoopLoading(true);
-    try {
-      const res = await fetch('/api/modagpt/loop', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'reset' })
-      });
-      const data = await res.json();
-      if (data.success) {
-        setLoopChatHistory([
-          {
-            id: "msg_init",
-            sender: "assistant",
-            text: "您好！我是 ModaGPT 唯一核心主脑 Executive Brain。作为您的商业 COO，我时刻守卫着您的店铺资产与大盘水位，并通过大宪章底线自愈风险。请问您今天有什么需要我协助规划或自动执行的商业目标？",
-            timestamp: new Date().toISOString(),
-            thoughtOutput: "主脑就绪，等待下发目标。已就地对位 ECOS 大宪章及物理货架隔离保护。",
-            logs: ["[BOOT] 正在启动 ModaGPT 唯一核心主脑 Executive Brain...", "ModaGPT 认知运行时就绪，等待商家下达目标。"],
-            toolCalls: []
-          }
-        ]);
-        setLoopState({
-          goal: "尚未设定",
-          brand: { name: "Noir Sommer", identity: "欧式极简轻奢亚麻主义", market: ["德国", "法国", "意大利"] },
-          business: { revenue: 89400, profit: 58110, conversionRate: 2.38, adROI: 3.45 },
-          strategy: { activePlan: "未激活", riskLevel: 1, confidence: 0.92 },
-          memory: { shortTerm: [], longTerm: [], lessons: [] }
-        });
-        setLoopReflection('');
-        setLoopRePlan('');
-        setLoopThought('');
-        setLoopAnimatedLogs([]);
-        setLoopAnimatedTools([]);
-        setLoopIsClarificationNeeded(false);
-        setLoopRequiresApproval(false);
-        setLoopProposedPlan(null);
-      }
-    } catch (e) {
-      console.error(e);
-    } finally {
       setLoopLoading(false);
     }
   };
@@ -1433,289 +1255,47 @@ export default function PlatformTuningConsole() {
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             {/* Input & Loop Console */}
             <div className="lg:col-span-2 space-y-6">
-              
-              {/* Dual Tab Workspace (Dialogue vs Internal Terminal) */}
-              <div className="bg-slate-100 border border-slate-200 rounded-2xl overflow-hidden shadow-sm flex flex-col min-h-[500px] max-h-[600px]">
-                
-                {/* Workspace Header */}
-                <div className="bg-white border-b border-slate-200 px-4 py-3 flex justify-between items-center flex-wrap gap-2">
-                  <div className="flex items-center gap-2">
-                    <div className="bg-[#07C2E3]/10 p-1.5 rounded-lg border border-[#07C2E3]/20">
-                      <Brain className="w-4.5 h-4.5 text-[#07C2E3] animate-pulse" />
-                    </div>
-                    <div>
-                      <h3 className="text-xs font-black text-slate-800">ModaGPT Executive Brain Sidekick</h3>
-                      <p className="text-[9.5px] text-slate-400">ECOS 唯一认知闭环与大宪章保护运行时</p>
-                    </div>
-                  </div>
-                  
-                  <div className="flex items-center bg-slate-100 p-0.5 rounded-lg border border-slate-200 gap-1 text-[11px] font-bold">
-                    <button
-                      type="button"
-                      onClick={() => setWorkspaceView('chat')}
-                      className={`px-3 py-1.5 rounded-md transition-colors cursor-pointer ${workspaceView === 'chat' ? 'bg-white text-slate-950 shadow-sm' : 'text-slate-500 hover:text-slate-800'}`}
-                    >
-                      💬 Sidekick 对话 ({loopChatHistory.length})
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setWorkspaceView('logs')}
-                      className={`px-3 py-1.5 rounded-md transition-colors cursor-pointer ${workspaceView === 'logs' ? 'bg-white text-slate-950 shadow-sm' : 'text-slate-500 hover:text-slate-800'}`}
-                    >
-                      🖥️ 底层推理日志 ({loopAnimatedLogs.length})
-                    </button>
-                  </div>
-                </div>
-
-                {/* Workspace Body */}
-                <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-slate-50">
-                  
-                  {workspaceView === 'chat' ? (
-                    loopChatHistory.map((msg, idx) => {
-                      const isAssistant = msg.sender === 'assistant';
-                      const [isThoughtExpanded, setIsThoughtExpanded] = useState(idx === loopChatHistory.length - 1);
-
-                      return (
-                        <div
-                          key={msg.id || idx}
-                          className={`flex gap-3 text-xs leading-relaxed max-w-[85%] ${
-                            isAssistant ? 'mr-auto' : 'ml-auto flex-row-reverse'
-                          }`}
-                        >
-                          {/* Avatar */}
-                          <div className={`w-8 h-8 rounded-xl shrink-0 flex items-center justify-center font-bold shadow-sm ${
-                            isAssistant 
-                              ? 'bg-slate-900 text-[#07C2E3] border border-slate-800' 
-                              : 'bg-slate-200 text-slate-800 border border-slate-300'
-                          }`}>
-                            {isAssistant ? '🧠' : '商'}
-                          </div>
-
-                          {/* Message bubble */}
-                          <div className="space-y-2 flex-1">
-                            <div className={`p-4 rounded-2xl shadow-sm border ${
-                              isAssistant 
-                                ? 'bg-white border-slate-100 text-slate-800 font-medium' 
-                                : 'bg-slate-800 border-slate-700 text-white font-semibold'
-                            }`}>
-                              <p className="whitespace-pre-wrap leading-relaxed select-text">{msg.text}</p>
-                              
-                              {/* Timestamp */}
-                              <span className="text-[8.5px] text-slate-400 font-mono block mt-2 text-right">
-                                {msg.timestamp ? new Date(msg.timestamp).toLocaleTimeString() : ''}
-                              </span>
-                            </div>
-
-                            {/* Thought Output (For Assistant Only) */}
-                            {isAssistant && msg.thoughtOutput && (
-                              <div className="border border-slate-200/60 rounded-xl overflow-hidden bg-white shadow-inner">
-                                <button
-                                  type="button"
-                                  onClick={() => setIsThoughtExpanded(!isThoughtExpanded)}
-                                  className="w-full text-left px-3 py-2 bg-slate-100 hover:bg-slate-200/70 text-[10px] font-black font-mono text-slate-500 flex justify-between items-center transition-colors"
-                                >
-                                  <span>🧠 唯一主脑内部思考 (Cognitive Scratchpad)</span>
-                                  <span>{isThoughtExpanded ? '▼ 收起' : '► 展开'}</span>
-                                </button>
-                                
-                                {isThoughtExpanded && (
-                                  <div className="p-3 bg-slate-950 border-t border-slate-900 font-mono text-[9.5px] text-emerald-400 whitespace-pre-wrap leading-relaxed select-all">
-                                    {msg.thoughtOutput}
-                                  </div>
-                                )}
-                              </div>
-                            )}
-
-                            {/* Proposed Plan Gating Section */}
-                            {isAssistant && msg.proposedPlan && msg.proposedPlan.length > 0 && (
-                              <div className="bg-[#07C2E3]/5 border border-[#07C2E3]/20 rounded-2xl p-4 mt-3 space-y-3">
-                                <div className="flex justify-between items-center">
-                                  <span className="text-[10px] font-mono text-[#07C2E3] uppercase tracking-widest font-black">
-                                    📋 待授权物理执行商业全案
-                                  </span>
-                                  <span className="bg-[#07C2E3]/10 text-[#07C2E3] text-[9.5px] font-black px-2 py-0.5 rounded-full">
-                                    共 {msg.proposedPlan.length} 步
-                                  </span>
-                                </div>
-
-                                <div className="space-y-2 max-h-[180px] overflow-y-auto pr-1">
-                                  {msg.proposedPlan.map((step: any, sIdx: number) => (
-                                    <div key={sIdx} className="bg-white border border-slate-200/60 p-2.5 rounded-xl flex items-start gap-2.5 shadow-sm text-[11px]">
-                                      <span className="bg-slate-100 text-slate-500 w-5 h-5 rounded-md flex items-center justify-center font-mono font-bold shrink-0 text-[10px]">
-                                        {sIdx + 1}
-                                      </span>
-                                      <div className="flex-1">
-                                        <div className="flex justify-between items-center">
-                                          <span className="font-extrabold text-slate-800 font-mono text-[10px]">{step.tool}()</span>
-                                          <span className="text-[9px] text-[#07C2E3] font-mono font-bold">READY</span>
-                                        </div>
-                                        <p className="text-slate-600 mt-0.5 font-medium leading-relaxed">{step.desc}</p>
-                                        {step.args && Object.keys(step.args).length > 0 && (
-                                          <div className="bg-slate-50 border border-slate-100 p-1.5 rounded-md font-mono text-[9px] text-slate-400 mt-1 select-all">
-                                            Args: {JSON.stringify(step.args)}
-                                          </div>
-                                        )}
-                                      </div>
-                                    </div>
-                                  ))}
-                                </div>
-
-                                {/* Live approval buttons (Only on the latest message) */}
-                                {idx === loopChatHistory.length - 1 && loopRequiresApproval && (
-                                  <div className="pt-2 border-t border-slate-200/60 flex gap-2">
-                                    <button
-                                      type="button"
-                                      onClick={handleApproveExecute}
-                                      disabled={loopLoading}
-                                      className="flex-1 bg-[#07C2E3] hover:bg-[#06B2D0] active:scale-95 text-white py-2 px-3 rounded-xl text-xs font-black transition-all flex items-center justify-center gap-1.5 shadow cursor-pointer"
-                                    >
-                                      <CheckSquare className="w-4 h-4" />
-                                      <span>授权物理落库执行 (Approve)</span>
-                                    </button>
-                                    <button
-                                      type="button"
-                                      onClick={() => {
-                                        setLoopProposedPlan(null);
-                                        setLoopRequiresApproval(false);
-                                        setLoopChatHistory(prev => [
-                                          ...prev,
-                                          {
-                                            id: "msg_rej_" + Date.now(),
-                                            sender: "assistant",
-                                            text: "方案已由商家审计驳回。主脑已安全清空挂起的方案，大盘资产未发生任何消耗修改。您可以重新提出新的商业要求。",
-                                            timestamp: new Date().toISOString()
-                                          }
-                                        ]);
-                                      }}
-                                      disabled={loopLoading}
-                                      className="bg-slate-200 hover:bg-slate-300 active:scale-95 text-slate-700 py-2 px-3 rounded-xl text-xs font-bold transition-all cursor-pointer"
-                                    >
-                                      拒绝方案
-                                    </button>
-                                  </div>
-                                )}
-                              </div>
-                            )}
-
-                          </div>
-                        </div>
-                      );
-                    })
-                  ) : (
-                    /* Bottom Internal Logs Terminal Tab */
-                    <div className="font-mono text-[11px] text-slate-300 space-y-2 leading-relaxed">
-                      {loopAnimatedLogs.length === 0 ? (
-                        <div className="h-full flex flex-col justify-center items-center text-center py-24 text-slate-400">
-                          <Cpu className="w-8 h-8 mb-2 opacity-30 text-[#07C2E3]" />
-                          <p>无历史底层推理日志。设定经营目标后自动流转。</p>
-                        </div>
-                      ) : (
-                        loopAnimatedLogs.map((log, index) => {
-                          let colorClass = "text-slate-300";
-                          let prefix = "• ";
-                          if (log.startsWith("[BOOT]")) { colorClass = "text-[#07C2E3] font-bold"; prefix = "🚀 "; }
-                          else if (log.startsWith("[OBSERVE_STATE]")) { colorClass = "text-amber-300"; prefix = "🔍 "; }
-                          else if (log.startsWith("[INTERPRET_INTENT]")) { colorClass = "text-violet-300"; prefix = "💡 "; }
-                          else if (log.startsWith("[PLAN]")) { colorClass = "text-emerald-300 font-semibold"; prefix = "📋 "; }
-                          else if (log.startsWith("[EXECUTE]")) { colorClass = "text-cyan-400"; prefix = "⚡ "; }
-                          else if (log.startsWith("[OBSERVE_RESULT]")) { colorClass = "text-yellow-400"; prefix = "👁️ "; }
-                          else if (log.startsWith("[REFLECT]")) { colorClass = "text-indigo-300 font-bold"; prefix = "🧠 "; }
-                          else if (log.startsWith("[RE_PLAN]")) { colorClass = "text-purple-300"; prefix = "🔄 "; }
-                          else if (log.startsWith("❌") || log.startsWith("error")) { colorClass = "text-rose-400 font-bold"; prefix = "🚨 "; }
-
-                          return (
-                            <div key={index} className="border-b border-slate-200/5 pb-1.5 last:border-0">
-                              <span className="opacity-80">{prefix}</span>
-                              <span className={colorClass}>{log}</span>
-                            </div>
-                          );
-                        })
-                      )}
-                    </div>
-                  )}
-
-                </div>
-              </div>
-
-              {/* Chat Prompts & Input Control */}
               <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm space-y-4">
-                
-                {/* Loop Gating Gimmicks status warning */}
-                {loopIsClarificationNeeded && (
-                  <div className="bg-amber-500/10 text-amber-600 border border-amber-500/20 px-3.5 py-2.5 rounded-xl text-xs font-bold flex items-center gap-2">
-                    <AlertTriangle className="w-4.5 h-4.5 animate-pulse" />
-                    <span>主脑需要您澄清细节：请在下方文本框输入您的回答。</span>
-                  </div>
-                )}
-
-                {loopRequiresApproval && !loopLoading && (
-                  <div className="bg-emerald-500/10 text-emerald-600 border border-emerald-500/20 px-3.5 py-2.5 rounded-xl text-xs font-bold flex items-center gap-2">
-                    <CheckSquare className="w-4.5 h-4.5 animate-bounce" />
-                    <span>决策已就绪！请点击对话流中方案底部的 [授权物理落库执行] 进行实操部署。</span>
-                  </div>
-                )}
-
                 <div className="flex justify-between items-center">
-                  <h3 className="text-xs font-black text-slate-900 flex items-center gap-2">
+                  <h3 className="text-sm font-black text-slate-900 flex items-center gap-2">
                     <Sparkles className="w-4 h-4 text-[#07C2E3]" />
-                    <span>与 ModaGPT Executive Brain 保持对话 (Direct Dialogue)</span>
+                    <span>设定经营业务目标 (Set Commerce Goal)</span>
                   </h3>
-                  <button
-                    type="button"
-                    onClick={handleResetLoop}
-                    disabled={loopLoading}
-                    className="text-[10px] font-mono font-bold text-rose-500 hover:text-rose-600 cursor-pointer flex items-center gap-1 bg-rose-50 hover:bg-rose-100 border border-rose-100 px-2.5 py-1 rounded-lg transition-colors"
-                  >
-                    <Trash2 className="w-3.5 h-3.5" />
-                    <span>重置大脑 (Reset)</span>
-                  </button>
+                  <span className="text-[10px] font-mono text-slate-400">INPUT AREA</span>
                 </div>
 
                 <div className="relative">
                   <textarea
-                    rows={2}
+                    rows={3}
                     value={loopGoal}
                     onChange={(e) => setLoopGoal(e.target.value)}
-                    disabled={loopLoading}
-                    placeholder={loopIsClarificationNeeded ? "请输入您对主脑追问的具体细节说明（如：'偏向平价快时尚、预算200欧、首推德国市场'）" : "请输入您对主脑的具体指令（如：'我想做个法国轻奢亚麻品牌'、'帮我诊断法国仓退换货情况'）"}
+                    placeholder="请输入本周期您希望 ModaGPT 主脑执行的商业自愈、建店上架、或流量获客方案..."
                     className="w-full text-slate-800 text-xs p-4 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-[#07C2E3]/50 focus:border-[#07C2E3] bg-slate-50 font-medium placeholder-slate-400 resize-none leading-relaxed shadow-inner"
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter' && !e.shiftKey) {
-                        e.preventDefault();
-                        if (!loopLoading && loopGoal.trim()) {
-                          handleRunLoop();
-                        }
-                      }
-                    }}
                   />
                 </div>
 
-                <div className="flex justify-between items-center gap-4 flex-wrap">
-                  {/* Suggestion Chips */}
+                <div className="flex justify-between items-center gap-4">
                   <div className="flex flex-wrap gap-1.5">
                     <button
                       type="button"
-                      disabled={loopLoading}
-                      onClick={() => setLoopGoal("帮我做个轻奢复古亚麻连衣裙品牌，主要投放德国和法国，预算 €300。")}
-                      className="bg-slate-100 hover:bg-slate-200/80 disabled:opacity-50 text-[9.5px] text-slate-600 font-bold px-2.5 py-1.5 rounded-lg transition-colors cursor-pointer"
+                      onClick={() => setLoopGoal("帮我做一个和 Zara 风格类似的夏季女装系列，面向德国市场，预算 €500 推广广告，一键自动化上架建店与跨境部署。")}
+                      className="bg-slate-100 hover:bg-slate-200 text-[10px] text-slate-600 font-bold px-2.5 py-1.5 rounded-lg transition-colors cursor-pointer"
                     >
-                      👗 欧式轻奢连衣裙品牌
+                      💡 Zara夏季服饰全案
                     </button>
                     <button
                       type="button"
-                      disabled={loopLoading}
-                      onClick={() => setLoopGoal("我倾向于中高端定位。首选法国市场，预算 €500 做 TikTok 投放。")}
-                      className="bg-slate-100 hover:bg-slate-200/80 disabled:opacity-50 text-[9.5px] text-slate-600 font-bold px-2.5 py-1.5 rounded-lg transition-colors cursor-pointer"
+                      onClick={() => setLoopGoal("诊断近期法国海外仓备货水位，针对滞销防风衣大衣微调价格弹性并一键同步清空呆滞库存。")}
+                      className="bg-slate-100 hover:bg-slate-200 text-[10px] text-slate-600 font-bold px-2.5 py-1.5 rounded-lg transition-colors cursor-pointer"
                     >
-                      💡 澄清：高端法国投放
+                      📦 法国仓动销自愈
                     </button>
                     <button
                       type="button"
-                      disabled={loopLoading}
-                      onClick={() => setLoopGoal("重算大盘收益重整财务，并对德国仓尺码问题做退换货总结。")}
-                      className="bg-slate-100 hover:bg-slate-200/80 disabled:opacity-50 text-[9.5px] text-slate-600 font-bold px-2.5 py-1.5 rounded-lg transition-colors cursor-pointer"
+                      onClick={() => setLoopGoal("分析近期全大盘交易数据重算总税后盈亏，并注册开通欧盟 VAT OSS 申报账簿。")}
+                      className="bg-slate-100 hover:bg-slate-200 text-[10px] text-slate-600 font-bold px-2.5 py-1.5 rounded-lg transition-colors cursor-pointer"
                     >
-                      📦 德国仓自愈审计
+                      🇪🇺 欧盟 VAT OSS 合规
                     </button>
                   </div>
 
@@ -1732,17 +1312,69 @@ export default function PlatformTuningConsole() {
                     {loopLoading ? (
                       <>
                         <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                        <span>唯一主脑深度推理中...</span>
+                        <span>正在执行主脑认知环...</span>
                       </>
                     ) : (
                       <>
                         <Play className="w-3.5 h-3.5 fill-current" />
-                        <span>对话唯一主脑 (Send)</span>
+                        <span>一键执掌商业闭环 (Execute Goal)</span>
                       </>
                     )}
                   </button>
                 </div>
+              </div>
 
+              {/* Cognitive Terminal Visualizer */}
+              <div className="bg-slate-950 border border-slate-900 rounded-2xl overflow-hidden shadow-xl flex flex-col min-h-[420px]">
+                <div className="bg-slate-900 px-4 py-3 border-b border-slate-800 flex justify-between items-center">
+                  <div className="flex items-center gap-2">
+                    <div className="flex gap-1.5">
+                      <span className="w-2.5 h-2.5 rounded-full bg-rose-500"></span>
+                      <span className="w-2.5 h-2.5 rounded-full bg-amber-500"></span>
+                      <span className="w-2.5 h-2.5 rounded-full bg-emerald-500"></span>
+                    </div>
+                    <span className="text-[10px] text-slate-400 font-mono tracking-wider ml-2 uppercase">ModaGPT Executive Brain Terminal</span>
+                  </div>
+                  <div className="flex items-center gap-1 bg-slate-950/50 px-2 py-0.5 rounded text-[9px] text-slate-500 font-mono">
+                    <span className="w-1.5 h-1.5 rounded-full bg-[#07C2E3] animate-pulse mr-1"></span>
+                    <span>COGNITIVE_LOOP_RUNNING</span>
+                  </div>
+                </div>
+
+                <div className="p-4 flex-1 font-mono text-[11px] text-slate-300 space-y-2.5 overflow-y-auto max-h-[450px] leading-relaxed select-all">
+                  {loopAnimatedLogs.length === 0 ? (
+                    <div className="h-full flex flex-col justify-center items-center text-center py-20 text-slate-600">
+                      <Cpu className="w-10 h-10 mb-2 opacity-30 animate-pulse text-[#07C2E3]" />
+                      <p>等待目标下发。激活后，主脑会在此输出全链 Observe & Plan 执行链路。</p>
+                    </div>
+                  ) : (
+                    loopAnimatedLogs.map((log, index) => {
+                      let colorClass = "text-slate-300";
+                      let prefix = "• ";
+                      if (log.startsWith("[BOOT]")) { colorClass = "text-[#07C2E3] font-bold"; prefix = "🚀 "; }
+                      else if (log.startsWith("[OBSERVE_STATE]")) { colorClass = "text-amber-300"; prefix = "🔍 "; }
+                      else if (log.startsWith("[INTERPRET_INTENT]")) { colorClass = "text-violet-300"; prefix = "💡 "; }
+                      else if (log.startsWith("[PLAN]")) { colorClass = "text-emerald-300 font-semibold"; prefix = "📋 "; }
+                      else if (log.startsWith("[EXECUTE]")) { colorClass = "text-cyan-400"; prefix = "⚡ "; }
+                      else if (log.startsWith("[OBSERVE_RESULT]")) { colorClass = "text-yellow-400"; prefix = "👁️ "; }
+                      else if (log.startsWith("[REFLECT]")) { colorClass = "text-indigo-300 font-bold"; prefix = "🧠 "; }
+                      else if (log.startsWith("[RE_PLAN]")) { colorClass = "text-purple-300"; prefix = "🔄 "; }
+                      else if (log.startsWith("❌") || log.startsWith("error")) { colorClass = "text-rose-500 font-bold"; prefix = "🚨 "; }
+
+                      return (
+                        <div key={index} className={`border-b border-slate-900/40 pb-1.5 last:border-0 ${colorClass}`}>
+                          <span className="opacity-80">{prefix}</span>
+                          <span>{log}</span>
+                        </div>
+                      );
+                    })
+                  )}
+                  {loopLoading && (
+                    <div className="flex items-center gap-1 text-[#07C2E3] animate-pulse">
+                      <span>_</span>
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
 
@@ -1870,23 +1502,6 @@ export default function PlatformTuningConsole() {
           </div>
 
           {/* Post-execution Reflections & Continuous automation */}
-          {loopThought && (
-            <div className="bg-gradient-to-r from-[#07C2E3]/5 to-indigo-50/30 border border-[#07C2E3]/20 rounded-2xl p-5 shadow-sm space-y-3 animate-fadeIn">
-              <div className="flex justify-between items-center">
-                <h3 className="text-sm font-black text-slate-900 flex items-center gap-2">
-                  <Brain className="w-4.5 h-4.5 text-[#07C2E3] animate-pulse" />
-                  <span>主脑核心战略决策书 (Executive Brain Strategic Command)</span>
-                </h3>
-                <span className="text-[10px] font-mono font-bold bg-[#07C2E3]/10 text-[#07C2E3] px-2.5 py-1 rounded-full border border-[#07C2E3]/20">
-                  COGNITIVE REASONING SUCCESS
-                </span>
-              </div>
-              <div className="text-xs text-slate-800 leading-relaxed bg-white p-4 rounded-xl border border-slate-100 font-medium whitespace-pre-wrap">
-                {loopThought}
-              </div>
-            </div>
-          )}
-
           {loopReflection && (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6 animate-fadeIn">
               {/* Cognitive Reflection Audit */}

@@ -339,11 +339,15 @@ import {
   PlanningRunItem,
   HealingIncidentItem,
   HealingActionItem,
-  HealingAuditLogItem
+  HealingAuditLogItem,
+  BusinessGraphNode,
+  BusinessGraphEdge
 } from '../types';
 
 // Structure of our entire local database state
 interface DBState {
+  business_graph_nodes: BusinessGraphNode[];
+  business_graph_edges: BusinessGraphEdge[];
   users: UserProfile[];
   tenants: Tenant[];
   stores: Store[];
@@ -745,6 +749,8 @@ class DatabaseEngine {
       if (data) {
         const parsed = JSON.parse(data);
         return {
+          business_graph_nodes: parsed.business_graph_nodes || [],
+          business_graph_edges: parsed.business_graph_edges || [],
           users: parsed.users || [],
           tenants: parsed.tenants || [],
           stores: parsed.stores || [],
@@ -1209,6 +1215,8 @@ class DatabaseEngine {
       product_catalog_specs: [],
       product_asset_items: [],
       business_memory_records: [],
+      business_graph_nodes: [],
+      business_graph_edges: [],
       
       // Phase 210-220 empty default states
       fashion_entities: [],
@@ -3459,6 +3467,8 @@ class DatabaseEngine {
       product_catalog_specs: [],
       product_asset_items: [],
       business_memory_records: [],
+      business_graph_nodes: [],
+      business_graph_edges: [],
       fashion_entities: [],
       fashion_relations: [],
       fashion_taxonomy: [],
@@ -5973,6 +5983,175 @@ class DatabaseEngine {
       }
     ];
 
+    // Seeding Business graph relationship model (nodes and edges)
+    this.state.business_graph_nodes = [
+      {
+        id: 'bg_node_sup_01',
+        type: 'Supplier',
+        entityId: 'sup_01',
+        label: 'Prato Wool Spinning S.p.A. (Italy)',
+        metrics: {
+          performance_score: 94,
+          defect_rate_pct: 1.2
+        },
+        metadata: { region: 'Tuscany', primary_material: 'Cashmere & Merino Blend' }
+      },
+      {
+        id: 'bg_node_sup_02',
+        type: 'Supplier',
+        entityId: 'sup_02',
+        label: 'Lyon Silk Weaving Atelier (France)',
+        metrics: {
+          performance_score: 72,
+          defect_rate_pct: 3.8
+        },
+        metadata: { region: 'Auvergne-Rhône-Alpes', primary_material: 'Premium Mulberry Silk' }
+      },
+      {
+        id: 'bg_node_prod_101',
+        type: 'Product',
+        entityId: 'prod_101',
+        label: 'Ultra-Fine Cashmere Double-Breasted Coat',
+        metrics: {
+          performance_score: 96,
+          return_rate_pct: 2.1,
+          revenue_eur: 580000
+        },
+        metadata: { sku: 'CASH-COAT-001', designer: 'MODA Studio Paris' }
+      },
+      {
+        id: 'bg_node_prod_102',
+        type: 'Product',
+        entityId: 'prod_102',
+        label: 'Hand-Rolled Silk Twill Scarf 90x90',
+        metrics: {
+          performance_score: 82,
+          return_rate_pct: 9.4,
+          revenue_eur: 240000
+        },
+        metadata: { sku: 'SILK-SCARF-002', designer: 'Atelier de Lyon' }
+      },
+      {
+        id: 'bg_node_cust_lux',
+        type: 'CustomerSegment',
+        entityId: 'seg_lux_01',
+        label: 'Continental Europe High-Net-Worth Segment',
+        metrics: {
+          satisfaction_rate: 95,
+          revenue_eur: 680000
+        },
+        metadata: { country_codes: ['FR', 'DE', 'CH'], main_preference: 'Quiet Luxury' }
+      },
+      {
+        id: 'bg_node_cust_elite',
+        type: 'CustomerSegment',
+        entityId: 'seg_elite_01',
+        label: 'Paris & Milan Emerging Gen-Z Style Leads',
+        metrics: {
+          satisfaction_rate: 76,
+          revenue_eur: 180000
+        },
+        metadata: { country_codes: ['IT', 'FR'], main_preference: 'Avant-Garde Style' }
+      },
+      {
+        id: 'bg_node_camp_winter',
+        type: 'Campaign',
+        entityId: 'cmp_01',
+        label: '2025 Winter Warmth Cashmere Wool Campaign',
+        metrics: {
+          roi: 4.8,
+          revenue_eur: 421000
+        },
+        metadata: { status: 'active', region: 'Rhône-Alpes & Paris' }
+      },
+      {
+        id: 'bg_node_camp_bf',
+        type: 'Campaign',
+        entityId: 'cmp_02',
+        label: '2026 Black Friday European Fast-Turn Defender Campaign',
+        metrics: {
+          roi: 1.8,
+          revenue_eur: 150000
+        },
+        metadata: { status: 'draft' }
+      }
+    ];
+
+    this.state.business_graph_edges = [
+      {
+        id: 'bg_edge_01',
+        source: 'bg_node_sup_01',
+        target: 'bg_node_prod_101',
+        relationType: 'SUPPLIES_FOR',
+        weight: 0.95,
+        direction: 'positive',
+        explanation: 'Prato Spinning’s 94% high reliability score in supplying grade-A organic cashmere wool directly sustains the 96% high-quality rating of the Double-Breasted Coat.'
+      },
+      {
+        id: 'bg_edge_02',
+        source: 'bg_node_sup_02',
+        target: 'bg_node_prod_102',
+        relationType: 'SUPPLIES_FOR',
+        weight: 0.85,
+        direction: 'negative',
+        explanation: 'Lyon Atelier’s recent 3.8% defect rate spike in Mulberry Silk batch caused raw material compromises, directly lowering the finished Silk Scarf quality rating to 82%.'
+      },
+      {
+        id: 'bg_edge_03',
+        source: 'bg_node_prod_101',
+        target: 'bg_node_cust_lux',
+        relationType: 'PURCHASED_BY',
+        weight: 0.90,
+        direction: 'positive',
+        explanation: 'High quality of the Cashmere Double-Breasted Coat perfectly satisfies High-Net-Worth buyers, resulting in a stellar 95% satisfaction rating and low 2.1% returns.'
+      },
+      {
+        id: 'bg_edge_04',
+        source: 'bg_node_prod_102',
+        target: 'bg_node_cust_elite',
+        relationType: 'PURCHASED_BY',
+        weight: 0.75,
+        direction: 'negative',
+        explanation: 'Silk Scarf shipping delays and resulting material compromises directly triggered negative customer reviews, pulling down Emerging Gen-Z satisfaction rate to 76%.'
+      },
+      {
+        id: 'bg_edge_05',
+        source: 'bg_node_prod_101',
+        target: 'bg_node_camp_winter',
+        relationType: 'PROMOTED_IN',
+        weight: 0.92,
+        direction: 'positive',
+        explanation: 'Premium cashmere coat stocking in Alpine warehouses aligned with early cold snaps, driving the Winter Campaign to achieve a peak ROI of 4.8.'
+      },
+      {
+        id: 'bg_edge_06',
+        source: 'bg_node_prod_102',
+        target: 'bg_node_camp_bf',
+        relationType: 'PROMOTED_IN',
+        weight: 0.80,
+        direction: 'negative',
+        explanation: 'Low customer satisfaction and raw silk delivery delays directly bottlenecked Black Friday Campaign promotion efficiency, limiting estimated ROI to a weak 1.8.'
+      },
+      {
+        id: 'bg_edge_07',
+        source: 'bg_node_sup_02',
+        target: 'bg_node_camp_bf',
+        relationType: 'INFLUENCED_BY',
+        weight: 0.88,
+        direction: 'negative',
+        explanation: 'Lyon supplier’s capacity bottleneck directly constrained active stock for Black Friday, creating a chain reaction where low supplier performance throttled campaign ROI.'
+      },
+      {
+        id: 'bg_edge_08',
+        source: 'bg_node_cust_elite',
+        target: 'bg_node_camp_bf',
+        relationType: 'DRIVES_ROI',
+        weight: 0.78,
+        direction: 'negative',
+        explanation: '76% low customer satisfaction in Emerging Gen-Z demographic severely weakened repeat purchases during active Black Friday ad campaigns, depressing overall ROI.'
+      }
+    ];
+
     this.saveToStorage();
   }
 
@@ -6414,22 +6593,6 @@ class DatabaseEngine {
       this.saveToStorage();
       this.notify('all');
       return aud;
-    }
-  };
-
-  // 16b. SELF EVOLUTION LOGS
-  public self_evolution_logs = {
-    getAll: (): SelfEvolutionLog[] => [...this.state.self_evolution_logs],
-    getByTenant: (tenantId: string): SelfEvolutionLog[] => this.state.self_evolution_logs.filter(l => l.tenantId === tenantId),
-    create: (data: Omit<SelfEvolutionLog, 'id'>): SelfEvolutionLog => {
-      const log: SelfEvolutionLog = {
-        ...data,
-        id: `sel_${Math.random().toString(36).substring(2, 11)}`
-      };
-      this.state.self_evolution_logs.push(log);
-      this.saveToStorage();
-      this.notify('all');
-      return log;
     }
   };
 
@@ -9083,6 +9246,46 @@ class DatabaseEngine {
     }
   };
 
+  public business_graph_nodes = {
+    getAll: (): BusinessGraphNode[] => [...this.state.business_graph_nodes],
+    getById: (id: string): BusinessGraphNode | undefined => this.state.business_graph_nodes.find(x => x.id === id),
+    create: (data: Omit<BusinessGraphNode, 'id'>): BusinessGraphNode => {
+      const item: BusinessGraphNode = { ...data, id: `bg_node_${Math.random().toString(36).substring(2, 11)}` };
+      this.state.business_graph_nodes.push(item);
+      this.saveToStorage();
+      this.notify('all');
+      return item;
+    },
+    update: (id: string, data: Partial<Omit<BusinessGraphNode, 'id'>>): void => {
+      this.state.business_graph_nodes = this.state.business_graph_nodes.map(x => 
+        x.id === id ? { ...x, ...data, metrics: { ...x.metrics, ...data.metrics } } : x
+      );
+      this.saveToStorage();
+      this.notify('all');
+    },
+    delete: (id: string): void => {
+      this.state.business_graph_nodes = this.state.business_graph_nodes.filter(x => x.id !== id);
+      this.saveToStorage();
+      this.notify('all');
+    }
+  };
+
+  public business_graph_edges = {
+    getAll: (): BusinessGraphEdge[] => [...this.state.business_graph_edges],
+    create: (data: Omit<BusinessGraphEdge, 'id'>): BusinessGraphEdge => {
+      const item: BusinessGraphEdge = { ...data, id: `bg_edge_${Math.random().toString(36).substring(2, 11)}` };
+      this.state.business_graph_edges.push(item);
+      this.saveToStorage();
+      this.notify('all');
+      return item;
+    },
+    delete: (id: string): void => {
+      this.state.business_graph_edges = this.state.business_graph_edges.filter(x => x.id !== id);
+      this.saveToStorage();
+      this.notify('all');
+    }
+  };
+
   // Phase 210: Global Fashion Ontology Engine
   public fashion_entities = {
     getAll: (): FashionEntity[] => [...this.state.fashion_entities],
@@ -9414,6 +9617,17 @@ class DatabaseEngine {
     create: (data: Omit<SelfEvaluation, 'id'>): SelfEvaluation => {
       const item: SelfEvaluation = { ...data, id: `seval_${Math.random().toString(36).substring(2, 11)}` };
       this.state.self_evaluations.push(item);
+      this.saveToStorage();
+      this.notify('all');
+      return item;
+    }
+  };
+
+  public self_evolution_logs = {
+    getAll: (): SelfEvolutionLog[] => [...this.state.self_evolution_logs],
+    create: (data: Omit<SelfEvolutionLog, 'id'>): SelfEvolutionLog => {
+      const item: SelfEvolutionLog = { ...data, id: `evo_${Math.random().toString(36).substring(2, 11)}` };
+      this.state.self_evolution_logs.push(item);
       this.saveToStorage();
       this.notify('all');
       return item;

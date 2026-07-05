@@ -35,6 +35,7 @@ export default function OrdersView() {
   const { orders, orderFilter, setOrderFilter, addOrder, updateOrder, deleteOrder } = useOrderStore();
   const { togglePreview } = usePanelStore();
   const { settings } = useShopStore();
+  const currencySymbol = settings.currencySymbol || '¥';
   const { products } = useProductStore();
 
   // Input controller states
@@ -377,8 +378,8 @@ export default function OrdersView() {
                 <tr key={idx} className="text-neutral-800">
                   <td className="p-3 font-sans font-medium text-neutral-900">{item.title}</td>
                   <td className="p-3 text-center">{item.quantity}</td>
-                  <td className="p-3 text-right">€{item.price.toFixed(2)}</td>
-                  <td className="p-3 text-right font-bold text-neutral-900">€{(item.price * item.quantity).toFixed(2)}</td>
+                  <td className="p-3 text-right">{currencySymbol}{item.price.toFixed(2)}</td>
+                  <td className="p-3 text-right font-bold text-neutral-900">{currencySymbol}{(item.price * item.quantity).toFixed(2)}</td>
                 </tr>
               ))}
             </tbody>
@@ -389,19 +390,19 @@ export default function OrdersView() {
           <div className="w-56 text-xs font-mono text-neutral-500 space-y-1.5 pt-1">
             <div className="flex justify-between">
               <span>合计金额</span>
-              <span className="text-neutral-900">€{printedOrder.subtotal.toFixed(2)}</span>
+              <span className="text-neutral-900">{currencySymbol}{printedOrder.subtotal.toFixed(2)}</span>
             </div>
             <div className="flex justify-between">
               <span>系统附税 (12%)</span>
-              <span className="text-neutral-900">€{printedOrder.tax.toFixed(2)}</span>
+              <span className="text-neutral-900">{currencySymbol}{printedOrder.tax.toFixed(2)}</span>
             </div>
             <div className="flex justify-between">
               <span>高宽保价运宿费</span>
-              <span className="text-neutral-900">€{printedOrder.shipping.toFixed(2)}</span>
+              <span className="text-neutral-900">{currencySymbol}{printedOrder.shipping.toFixed(2)}</span>
             </div>
             <div className="flex justify-between border-t border-neutral-300 pt-2 text-sm font-extrabold text-neutral-950">
               <span>实核清算金</span>
-              <span className="text-[#008060]">€{printedOrder.total.toFixed(2)}</span>
+              <span className="text-[#008060]">{currencySymbol}{printedOrder.total.toFixed(2)}</span>
             </div>
           </div>
         </div>
@@ -1262,7 +1263,7 @@ export default function OrdersView() {
                         {renderProductBadge(item.image)}
                         <div>
                           <p className="font-extrabold text-neutral-900 font-sans tracking-tight">{item.title}</p>
-                          <span className="text-[10px] text-neutral-400 font-mono">单价: €{item.price.toFixed(2)}</span>
+                          <span className="text-[10px] text-neutral-400 font-mono">单价: {currencySymbol}{item.price.toFixed(2)}</span>
                         </div>
                       </div>
                       <span className="font-serif font-extrabold text-neutral-950">× {item.quantity}</span>
@@ -1313,25 +1314,25 @@ export default function OrdersView() {
                 <div className="space-y-2 text-xs font-mono">
                   <div className="flex justify-between">
                     <span className="text-neutral-400 font-sans">货款小计</span>
-                    <span className="text-neutral-900">€{selectedOrder.subtotal.toFixed(2)}</span>
+                    <span className="text-neutral-900">{currencySymbol}{selectedOrder.subtotal.toFixed(2)}</span>
                   </div>
                   {selectedOrder.discountAmount ? (
                     <div className="flex justify-between text-neutral-550">
                       <span className="font-sans">扣除折扣 Code</span>
-                      <span className="text-red-655">-€{selectedOrder.discountAmount.toFixed(2)}</span>
+                      <span className="text-red-655">-{currencySymbol}{selectedOrder.discountAmount.toFixed(2)}</span>
                     </div>
                   ) : null}
                   <div className="flex justify-between">
                     <span className="text-neutral-400 font-sans">税金 / VAT</span>
-                    <span className="text-neutral-900">€{selectedOrder.tax.toFixed(2)}</span>
+                    <span className="text-neutral-900">{currencySymbol}{selectedOrder.tax.toFixed(2)}</span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-neutral-400 font-sans">运宿费</span>
-                    <span className="text-neutral-900">€{selectedOrder.shipping.toFixed(2)}</span>
+                    <span className="text-neutral-900">{currencySymbol}{selectedOrder.shipping.toFixed(2)}</span>
                   </div>
                   <div className="flex justify-between border-t border-neutral-200 pt-2 font-extrabold text-[#008060] text-sm">
                     <span className="font-sans">总结算金</span>
-                    <span>€{selectedOrder.total.toFixed(2)}</span>
+                    <span>{currencySymbol}{selectedOrder.total.toFixed(2)}</span>
                   </div>
                 </div>
               </div>
@@ -1456,7 +1457,7 @@ export default function OrdersView() {
                 >
                   <option value="">-- 选择在录款式 --</option>
                   {products.map(p => (
-                    <option key={p.id} value={p.id}>{p.title} (单价: €{p.price})</option>
+                    <option key={p.id} value={p.id}>{p.title} (单价: {currencySymbol}{p.price})</option>
                   ))}
                 </select>
               </div>

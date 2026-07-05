@@ -1,0 +1,31 @@
++------------------------+
+|  BUSINESS_GRAPH_NODES  |
++------------------------+
+| PK  id                 | <----+
+|     type               |      |
+|     entity_id          |      |
+|     label              |      |
+|     performance_score  |      |
+|     satisfaction_rate  |      |
+|     roi                |      |
+|     revenue_eur        |      |
+|     return_rate_pct    |      |
+|     defect_rate_pct    |      |
+|     metadata           |      |
+|     created_at         |      |
++------------------------+      |
+                                |
+                                |  (many-to-one FK source)
+                                |
++------------------------+      |
+|  BUSINESS_GRAPH_EDGES  |------+
++------------------------+
+| PK  id                 |
+| FK  source             | ----> (refers to nodes.id)
+| FK  target             | ----> (refers to nodes.id)
+|     relation_type      |
+|     weight             |
+|     direction          |
+|     explanation        |
+|     created_at         |
++------------------------+

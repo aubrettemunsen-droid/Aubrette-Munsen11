@@ -343,6 +343,9 @@ export interface ChatMessage {
     intent: string;
     confidence: number;
     reasoning: string;
+    planning?: string;
+    permission?: string;
+    validator?: string;
   };
 }
 

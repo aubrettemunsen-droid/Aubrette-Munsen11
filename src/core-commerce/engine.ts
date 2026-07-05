@@ -136,7 +136,7 @@ class CommerceEngineImpl {
   private customers: Map<string, Customer> = new Map();
 
   createProduct(storeId: string, tenantId: string, product: Partial<Product>): Product {
-    const id = `prod_${Date.now()}`;
+    const id = product.id || `prod_${Date.now()}`;
     const newProduct: Product = {
       id,
       storeId,
@@ -174,6 +174,16 @@ class CommerceEngineImpl {
       }
       return p.storeId === storeId;
     });
+  }
+
+  deleteProduct(storeId: string, tenantId: string, id: string): boolean {
+    const product = this.products.get(id);
+    if (product && product.storeId === storeId && product.tenantId === tenantId) {
+      this.products.delete(id);
+      EventBus.emit('product:deleted', tenantId, storeId, { id }, 'commerce');
+      return true;
+    }
+    return false;
   }
 
   createOrder(storeId: string, tenantId: string, order: Partial<Order>): Order {

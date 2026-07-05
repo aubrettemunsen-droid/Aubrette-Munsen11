@@ -39,10 +39,6 @@ import {
   ContextEngineV2Layer,
   BrainFinalizationLayer
 } from './EcosAdvancedLayers';
-import {
-  BusinessStrategyMemoryLayer,
-  PersistentGoalSystemLayer
-} from './EcosStrategyGoalLayers';
 import { BusinessContextEngine } from '../../../services/brain/BusinessContextEngine';
 import { 
   FashionEntity, 
@@ -102,8 +98,6 @@ export default function PlatformIntelligenceCenter() {
     | 'l36_execution_governance'
     | 'l37_context_engine_v2'
     | 'l38_brain_finalization'
-    | 'l39_strategy_memory'
-    | 'l40_persistent_goals'
   >('l10_ontology');
 
   // Success Feedbacks state
@@ -1091,9 +1085,7 @@ export default function PlatformIntelligenceCenter() {
             { id: 'l35_agent_coordination', label: 'Layer 481-490: Agent 协同争议仲裁脑', status: 'DEBATES', emoji: '⚖️' },
             { id: 'l36_execution_governance', label: 'Layer 491-500: 自治执行安全治理层', status: 'GOVERNANCE', emoji: '🛡️' },
             { id: 'l37_context_engine_v2', label: 'Layer 501-520: 商业上下文 2.0 自动诊断', status: 'GATEWAY', emoji: '🔌' },
-            { id: 'l38_brain_finalization', label: 'Layer 521-540: 企业大脑最终自治闭环', status: 'MUTUAL_OS', emoji: '🌌' },
-            { id: 'l39_strategy_memory', label: 'Layer 541-550: 长期反思策略记忆自校准', status: 'STRATEGY_MEM', emoji: '🧠' },
-            { id: 'l40_persistent_goals', label: 'Layer 551-560: V4 持续认知持久化目标树', status: 'PERSISTENT_GOALS', emoji: '🎯' }
+            { id: 'l38_brain_finalization', label: 'Layer 521-540: 企业大脑最终自治闭环', status: 'MUTUAL_OS', emoji: '🌌' }
           ].map((layer) => (
             <button
               key={layer.id}
@@ -4992,14 +4984,6 @@ export default function PlatformIntelligenceCenter() {
 
           {intelLayer === 'l38_brain_finalization' && (
             <BrainFinalizationLayer triggerSuccess={triggerSuccess} />
-          )}
-
-          {intelLayer === 'l39_strategy_memory' && (
-            <BusinessStrategyMemoryLayer triggerSuccess={triggerSuccess} />
-          )}
-
-          {intelLayer === 'l40_persistent_goals' && (
-            <PersistentGoalSystemLayer triggerSuccess={triggerSuccess} />
           )}
 
         </div>
